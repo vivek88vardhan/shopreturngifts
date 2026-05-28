@@ -1,0 +1,677 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: ShopReturnGifts - E-commerce API (Single Lambda + API Gateway + Cognito + DynamoDB)
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 256
+    Runtime: provided.al2023
+    Architectures:
+      - arm64
+
+Parameters:
+  Stage:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+  FrontendDomain:
+    Type: String
+    Default: '*'
+    Description: Frontend domain for CORS (e.g., https://shop.example.com)
+  DomainName:
+    Type: String
+    Default: ''
+    Description: Custom domain name (e.g., shop.example.com). Leave empty to skip Route53+ACM.
+  HostedZoneId:
+    Type: String
+    Default: ''
+    Description: Route53 Hosted Zone ID for the domain. Required if DomainName is set.
+  ContactFromEmail:
+    Type: String
+    Default: 'shopreturngifts.az@gmail.com'
+    Description: >
+      SES "From" address (must complete verification in SES). Can be Gmail — you will get a
+      verification link from AWS. For production sending, a domain on your own DNS is often
+      preferable. Leave empty to skip creating the SES identity in this stack (set later in console).
+  ContactToEmail:
+    Type: String
+    Default: 'shopreturngifts.az@gmail.com'
+    Description: >
+      Inbox where contact form submissions are delivered (any provider, including Gmail).
+      In SES sandbox, this address must also be verified if it differs from ContactFromEmail.
+  SesRegion:
+    Type: String
+    Default: ''
+    Description: >
+      Optional. When non-empty, the SES API client uses this AWS region. Set this if your
+      verified identities live in a different region than the stack (must match SES console region).
+  CognitoFromEmail:
+    Type: String
+    Default: ''
+    Description: >
+      Optional branded From address for Cognito verification/reset emails, e.g. no-reply@shopreturngifts.com.
+      Leave empty to use Cognito's default sender. When set, this email/domain must be verified in SES
+      and the account must be out of the SES sandbox in this region.
+  CognitoSesIdentity:
+    Type: String
+    Default: ''
+    Description: >
+      Optional SES identity ARN suffix for CognitoFromEmail, e.g. shopreturngifts.com when using
+      no-reply@shopreturngifts.com from a verified domain. Leave empty to use CognitoFromEmail as the identity.
+  EmailLogoUrl:
+    Type: String
+    Default: ''
+    Description: Optional public HTTPS logo URL used in transactional email headers. Leave empty for a text wordmark.
+  AllowedOrigins:
+    Type: String
+    Default: '*'
+    Description: Comma-separated list of origins allowed by the API CORS middleware (e.g. https://app.example.com,https://preview.example.com). Use '*' to allow any origin.
+  CognitoDomainPrefix:
+    Type: String
+    Default: ''
+    Description: Cognito hosted-UI domain prefix (e.g. shopreturngifts-prod). Leave empty to skip OAuth.
+  GoogleClientId:
+    Type: String
+    Default: ''
+    Description: Google OAuth client ID. Leave empty to disable Google sign-in.
+  GoogleClientSecret:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: Google OAuth client secret.
+
+Conditions:
+  HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
+  HasCognitoDomain: !Not [!Equals [!Ref CognitoDomainPrefix, '']]
+  HasGoogle: !And
+    - !Not [!Equals [!Ref GoogleClientId, '']]
+    - !Not [!Equals [!Ref GoogleClientSecret, '']]
+  # Create SES email identities so deploy starts verification (you must click the link in email).
+  VerifySesContactFrom: !Not [!Equals [!Ref ContactFromEmail, '']]
+  VerifySesContactToDifferentAddress:
+    !And
+      - !Not [!Equals [!Ref ContactToEmail, '']]
+      - !Not [!Equals [!Ref ContactToEmail, !Ref ContactFromEmail]]
+  HasCognitoFromEmail: !Not [!Equals [!Ref CognitoFromEmail, '']]
+  HasCognitoSesIdentity: !Not [!Equals [!Ref CognitoSesIdentity, '']]
+
+Resources:
+  # ─── DynamoDB ───
+  AppTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+        - AttributeName: GSI1PK
+          AttributeType: S
+        - AttributeName: GSI1SK
+          AttributeType: S
+        - AttributeName: GSI2PK
+          AttributeType: S
+        - AttributeName: GSI2SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: GSI1
+          KeySchema:
+            - AttributeName: GSI1PK
+              KeyType: HASH
+            - AttributeName: GSI1SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: GSI2
+          KeySchema:
+            - AttributeName: GSI2PK
+              KeyType: HASH
+            - AttributeName: GSI2SK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      StreamSpecification:
+        StreamViewType: OLD_IMAGE
+      TimeToLiveSpecification:
+        AttributeName: TTL
+        Enabled: true
+
+  # ─── S3 Bucket (product images, invoices) ───
+  AssetsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true       # prevent ACL-based public access
+        BlockPublicPolicy: false    # bucket policy (public read for images) still allowed
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT]
+            AllowedOrigins: [!Ref FrontendDomain]
+            MaxAge: 3600
+
+  AssetsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AssetsBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub ${AssetsBucket.Arn}/*
+
+  # ─── S3 Bucket (Frontend Hosting) ───
+  FrontendBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: index.html
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  FrontendBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref FrontendBucket
+      PolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              CanonicalUser: !GetAtt CloudFrontOAI.S3CanonicalUserId
+            Action: s3:GetObject
+            Resource: !Sub ${FrontendBucket.Arn}/*
+
+  # ─── CloudFront Response Headers Policy ───
+  SecurityHeadersPolicy:
+    Type: AWS::CloudFront::ResponseHeadersPolicy
+    Properties:
+      ResponseHeadersPolicyConfig:
+        Name: !Sub shopreturngifts-security-headers-${Stage}
+        SecurityHeadersConfig:
+          StrictTransportSecurity:
+            Override: false
+            AccessControlMaxAgeSec: 63072000  # 2 years
+            IncludeSubdomains: true
+            Preload: true
+          ContentTypeOptions:
+            Override: true
+          FrameOptions:
+            FrameOption: DENY
+            Override: true
+          ReferrerPolicy:
+            ReferrerPolicy: strict-origin-when-cross-origin
+            Override: true
+          XSSProtection:
+            Protection: true
+            ModeBlock: true
+            Override: false  # modern browsers ignore this; keep as advisory only
+
+  # ─── CloudFront Distribution ───
+  CloudFrontOAI:
+    Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub shopreturngifts-frontend-${Stage}
+
+  FrontendDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        DefaultRootObject: index.html
+        Aliases:
+          !If
+            - HasCustomDomain
+            - [!Ref DomainName]
+            - !Ref AWS::NoValue
+        ViewerCertificate:
+          !If
+            - HasCustomDomain
+            - AcmCertificateArn: !Ref SSLCertificate
+              SslSupportMethod: sni-only
+              MinimumProtocolVersion: TLSv1.2_2021
+            - CloudFrontDefaultCertificate: true
+        Origins:
+          - Id: S3Origin
+            DomainName: !GetAtt FrontendBucket.RegionalDomainName
+            S3OriginConfig:
+              OriginAccessIdentity: !Sub origin-access-identity/cloudfront/${CloudFrontOAI}
+        DefaultCacheBehavior:
+          TargetOriginId: S3Origin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS]
+          CachedMethods: [GET, HEAD]
+          ForwardedValues:
+            QueryString: false
+            Cookies:
+              Forward: none
+          Compress: true
+          ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: /index.html
+        PriceClass: PriceClass_100
+
+  # ─── ACM Certificate (only if custom domain) ───
+  SSLCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+
+  # ─── Route53 Record (only if custom domain) ───
+  DnsRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasCustomDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt FrontendDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2  # CloudFront hosted zone ID (constant)
+
+  CognitoCustomMessageFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      FunctionName: !Sub shopreturngifts-cognito-message-${Stage}
+      CodeUri: backend/
+      Handler: bootstrap
+      Timeout: 10
+      Environment:
+        Variables:
+          EMAIL_LOGO_URL: !Ref EmailLogoUrl
+          WEBSITE_URL: !If
+            - HasCustomDomain
+            - !Sub https://${DomainName}
+            - !Sub https://${FrontendDistribution.DomainName}
+
+  CognitoCustomMessagePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CognitoCustomMessageFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !Sub 'arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*'
+
+  # ─── Cognito ───
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    DependsOn: CognitoCustomMessagePermission
+    Properties:
+      UserPoolName: !Sub shopreturngifts-${Stage}
+      EmailConfiguration: !If
+        - HasCognitoFromEmail
+        - EmailSendingAccount: DEVELOPER
+          From: !Sub 'KiranaBandi <${CognitoFromEmail}>'
+          SourceArn: !If
+            - HasCognitoSesIdentity
+            - !Sub 'arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${CognitoSesIdentity}'
+            - !Sub 'arn:${AWS::Partition}:ses:${AWS::Region}:${AWS::AccountId}:identity/${CognitoFromEmail}'
+        - !Ref 'AWS::NoValue'
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_CODE
+        EmailSubject: ShopReturnGifts verification code
+        EmailMessage: |
+          <!doctype html>
+          <html>
+            <body style="margin:0;padding:0;background:#f6f2ea;font-family:'Google Sans',Roboto,Arial,Helvetica,sans-serif;color:#1f2937;">
+              <div style="max-width:600px;margin:0 auto;padding:28px 16px;">
+                <div style="background:#ffffff;border:1px solid #eadfca;border-radius:18px;overflow:hidden;">
+                  <div style="padding:24px 28px;border-bottom:1px solid #f0e6d3;background:#fffaf0;">
+                    <div style="font-size:22px;font-weight:800;letter-spacing:0.02em;color:#1f2937;">KiranaBandi</div>
+                  </div>
+                  <div style="padding:28px;">
+                    <h1 style="margin:0 0 16px;font-size:24px;line-height:1.25;color:#111827;">Verify your email</h1>
+                    <p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#374151;">Welcome to ShopReturnGifts. Use this code to finish creating your account.</p>
+                    <div style="margin:24px 0;padding:18px 20px;border:1px solid #e8d6a8;background:#fff8e6;border-radius:12px;text-align:center;">
+                      <p style="margin:0 0 8px;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;color:#8a6a18;">Verification code</p>
+                      <p style="margin:0;font-size:30px;line-height:1.2;font-weight:700;letter-spacing:0.16em;color:#1f2937;">{####}</p>
+                    </div>
+                    <p style="margin:0;font-size:15px;line-height:1.65;color:#374151;">This code expires soon. If you did not request this email, you can safely ignore it.</p>
+                  </div>
+                  <div style="padding:20px 28px;background:#faf7f0;border-top:1px solid #f0e6d3;font-size:12px;line-height:1.5;color:#6b7280;">
+                    <p style="margin:0;">This is an automated security email from ShopReturnGifts.</p>
+                  </div>
+                </div>
+              </div>
+            </body>
+          </html>
+      LambdaConfig: !If
+        - HasCognitoFromEmail
+        - CustomMessage: !GetAtt CognitoCustomMessageFunction.Arn
+        - !Ref 'AWS::NoValue'
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireUppercase: true
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+      # NOTE: UserPoolAddOns (Threat Protection / AdvancedSecurityMode) requires the
+      # Cognito "Plus" pricing tier. Account is on "Essentials" — keep this disabled.
+      # To re-enable: upgrade the user pool tier in the Cognito console first.
+      Schema:
+        - Name: email
+          Required: true
+          Mutable: false
+        - Name: name
+          Required: false
+          Mutable: true
+
+  # ─── Cognito Hosted UI Domain (required for OAuth) ───
+  UserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Condition: HasCognitoDomain
+    Properties:
+      Domain: !Ref CognitoDomainPrefix
+      UserPoolId: !Ref UserPool
+
+  # ─── Google Identity Provider ───
+  GoogleIdentityProvider:
+    Type: AWS::Cognito::UserPoolIdentityProvider
+    Condition: HasGoogle
+    Properties:
+      UserPoolId: !Ref UserPool
+      ProviderName: Google
+      ProviderType: Google
+      ProviderDetails:
+        client_id: !Ref GoogleClientId
+        client_secret: !Ref GoogleClientSecret
+        authorize_scopes: openid email profile
+      AttributeMapping:
+        email: email
+        name: name
+
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub shopreturngifts-web-${Stage}
+      UserPoolId: !Ref UserPool
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      SupportedIdentityProviders:
+        !If
+          - HasCognitoDomain
+          - - COGNITO
+            - !If [HasGoogle, !Ref GoogleIdentityProvider, !Ref 'AWS::NoValue']
+          - !Ref 'AWS::NoValue'
+      CallbackURLs:
+        !If
+          - HasCognitoDomain
+          - - !If
+              - HasCustomDomain
+              - !Sub https://${DomainName}/auth/callback
+              - !Sub https://${FrontendDistribution.DomainName}/auth/callback
+          - !Ref 'AWS::NoValue'
+      LogoutURLs:
+        !If
+          - HasCognitoDomain
+          - - !If
+              - HasCustomDomain
+              - !Sub https://${DomainName}
+              - !Sub https://${FrontendDistribution.DomainName}
+          - !Ref 'AWS::NoValue'
+      AllowedOAuthFlows:
+        !If
+          - HasCognitoDomain
+          - - code
+          - !Ref 'AWS::NoValue'
+      AllowedOAuthScopes:
+        !If
+          - HasCognitoDomain
+          - - openid
+            - email
+            - profile
+          - !Ref 'AWS::NoValue'
+      AllowedOAuthFlowsUserPoolClient:
+        !If [HasCognitoDomain, true, false]
+
+  AdminGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: admin
+      UserPoolId: !Ref UserPool
+      Description: Store administrators with full access
+
+  # ─── SES email identities (optional; starts verification — finish in inbox or SES console) ───
+  SesContactFromIdentity:
+    Type: AWS::SES::EmailIdentity
+    Condition: VerifySesContactFrom
+    Properties:
+      EmailIdentity: !Ref ContactFromEmail
+
+  SesContactToIdentity:
+    Type: AWS::SES::EmailIdentity
+    Condition: VerifySesContactToDifferentAddress
+    Properties:
+      EmailIdentity: !Ref ContactToEmail
+
+  # ─── SNS: transactional email (API publishes → worker sends via SES) ───
+  EmailNotificationsTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub shopreturngifts-email-${Stage}
+      DisplayName: !Sub KiranaBandi email (${Stage})
+
+  EmailWorkerFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      FunctionName: !Sub shopreturngifts-email-worker-${Stage}
+      CodeUri: backend/
+      Handler: bootstrap
+      Timeout: 60
+      Environment:
+        Variables:
+          CONTACT_FROM_EMAIL: !Ref ContactFromEmail
+          SES_REGION: !Ref SesRegion
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: '*'
+      Events:
+        EmailQueue:
+          Type: SNS
+          Properties:
+            Topic: !Ref EmailNotificationsTopic
+
+  # ─── Lambda Function ───
+  ApiFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: makefile
+    Properties:
+      FunctionName: !Sub shopreturngifts-api-${Stage}
+      CodeUri: backend/
+      Handler: bootstrap
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref AppTable
+          S3_BUCKET: !Ref AssetsBucket
+          COGNITO_USER_POOL_ID: !Ref UserPool
+          COGNITO_APP_CLIENT_ID: !Ref UserPoolClient
+          STAGE: !Ref Stage
+          ALLOWED_ORIGINS: !Ref AllowedOrigins
+          COGNITO_DOMAIN_PREFIX: !Ref CognitoDomainPrefix
+          STRIPE_STATEMENT_DESCRIPTOR_SUFFIX: SHOPRETURNGIFTS
+          STRIPE_IDEMPOTENCY_KEY_PREFIX: shopreturngifts
+          STRIPE_AUTO_TAX_ENABLED: 'true'  # Enable Stripe Automatic Tax by default; can be overridden via store config
+          # Note: Stripe secrets (STRIPE_SECRET_KEY, STRIPE_PUBLISHABLE_KEY, STRIPE_WEBHOOK_SECRET)
+          # are now read directly from AWS Secrets Manager in the code (not from env vars)
+          # Contact form — sender must be a verified SES identity (email or domain).
+          # Pass real values via Stage parameter overrides or set as GitHub secrets.
+          CONTACT_FROM_EMAIL: !Ref ContactFromEmail
+          CONTACT_TO_EMAIL: !Ref ContactToEmail
+          SES_REGION: !Ref SesRegion
+          EMAIL_SNS_TOPIC_ARN: !Ref EmailNotificationsTopic
+          WEBSITE_URL: !If
+            - HasCustomDomain
+            - !Sub https://${DomainName}
+            - !Sub https://${FrontendDistribution.DomainName}
+          EMAIL_LOGO_URL: !Ref EmailLogoUrl
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref AppTable
+        - S3CrudPolicy:
+            BucketName: !Ref AssetsBucket
+        - Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminAddUserToGroup
+                - cognito-idp:AdminConfirmSignUp
+                - cognito-idp:AdminCreateUser
+                - cognito-idp:AdminGetUser
+                - cognito-idp:AdminUpdateUserAttributes
+                - cognito-idp:AdminDeleteUser
+                - cognito-idp:AdminDisableUser
+                - cognito-idp:AdminEnableUser
+                - cognito-idp:AdminRemoveUserFromGroup
+                - cognito-idp:AdminSetUserPassword
+                - cognito-idp:ChangePassword
+                - cognito-idp:ConfirmSignUp
+                - cognito-idp:ConfirmForgotPassword
+                - cognito-idp:ForgotPassword
+                - cognito-idp:InitiateAuth
+                - cognito-idp:ListUsers
+                - cognito-idp:ResendConfirmationCode
+                - cognito-idp:SignUp
+              Resource: !GetAtt UserPool.Arn
+        - Statement:
+            - Effect: Allow
+              Action:
+                - ses:SendEmail
+                - ses:SendRawEmail
+              Resource: '*'  # SES identities are scoped via the verified-identity check at send time
+        - Statement:
+            - Effect: Allow
+              Action:
+                - sns:Publish
+              Resource: !Ref EmailNotificationsTopic
+        - Statement:
+            - Effect: Allow
+              Action:
+                - secretsmanager:GetSecretValue
+              Resource: !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:ecommerce/${Stage}/backend-*'
+      Events:
+        CatchAll:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+            RestApiId: !Ref ApiGateway
+
+  # ─── API Gateway ───
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub shopreturngifts-${Stage}
+      StageName: !Ref Stage
+      MethodSettings:
+        - ResourcePath: /*
+          HttpMethod: '*'
+          ThrottlingBurstLimit: 200
+          ThrottlingRateLimit: 100
+      Cors:
+        AllowMethods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: !Sub "'${FrontendDomain}'"
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway URL
+    Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Stage}
+
+  StripeWebhookUrl:
+    Description: Stripe webhook endpoint URL
+    Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/api/stripe/webhook
+
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref UserPool
+
+  UserPoolClientId:
+    Description: Cognito App Client ID
+    Value: !Ref UserPoolClient
+
+  TableName:
+    Description: DynamoDB Table Name
+    Value: !Ref AppTable
+
+  AssetsBucket:
+    Description: S3 Assets Bucket
+    Value: !Ref AssetsBucket
+
+  FrontendBucketName:
+    Description: Frontend S3 Bucket Name
+    Value: !Ref FrontendBucket
+
+  CloudFrontDistributionId:
+    Description: CloudFront Distribution ID
+    Value: !Ref FrontendDistribution
+
+  CloudFrontDomainName:
+    Description: CloudFront Domain Name (use this URL to access the app)
+    Value: !GetAtt FrontendDistribution.DomainName
+
+  WebsiteUrl:
+    Description: Website URL
+    Value: !If
+      - HasCustomDomain
+      - !Sub https://${DomainName}
+      - !Sub https://${FrontendDistribution.DomainName}
+
+  SesSetupHint:
+    Description: Amazon SES — verify identities; sandbox only sends to verified addresses until production access.
+    Value: !Sub 'From=${ContactFromEmail} To=${ContactToEmail} region=${AWS::Region}'
+
+  EmailNotificationsTopicArn:
+    Description: SNS topic for transactional email (order, payment, rewards, admin alerts)
+    Value: !Ref EmailNotificationsTopic
+
+  EmailWorkerFunctionName:
+    Description: Lambda that sends email via SES when messages arrive on the SNS topic
+    Value: !Ref EmailWorkerFunction

@@ -1,0 +1,128 @@
+# ONE-TIME / MANUAL-ONLY purge workflow.
+# Keeps: CONFIG only (+ allowlisted admin Cognito users and their USER# profiles).
+# Deletes: audit log, all in-app notifications (USER#*#NOTIF), orders, rewards, catalog, etc.
+# Post-run verify step fails the job if unexpected DynamoDB rows remain.
+#
+# Triggers: workflow_dispatch ONLY (no push, pull_request, schedule, or deploy hooks).
+# Must be on the default branch (main) before it appears under Actions.
+# Cannot run from a normal git push or merge to main.
+#
+# Enablement: set repository secret PURGE_WORKFLOW_ENABLED=true before running.
+# After your one-time purge succeeds, delete that secret (or set it to anything else)
+# and remove this file (+ scripts/purge_transactional_data.py) in a follow-up PR.
+#
+# Secrets: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY (same as deploy)
+# Optional: GitHub Environment "production" with required reviewers (uncomment below).
+
+name: Purge transactional data
+
+# No automatic triggers — manual dispatch from Actions tab only.
+on:
+  workflow_dispatch:
+    inputs:
+      stack_name:
+        description: CloudFormation stack name
+        required: true
+        default: shopreturngifts-prod
+        type: string
+      dry_run:
+        description: Dry run (no deletes)
+        required: true
+        default: true
+        type: boolean
+      confirm:
+        description: Type PURGE to allow live delete (ignored when dry_run is true)
+        required: false
+        default: ""
+        type: string
+      purge_invoices:
+        description: Delete S3 invoices/ prefix
+        required: true
+        default: true
+        type: boolean
+      skip_cognito:
+        description: Skip Cognito user deletion
+        required: true
+        default: false
+        type: boolean
+      skip_dynamodb:
+        description: Skip DynamoDB deletion
+        required: true
+        default: false
+        type: boolean
+
+env:
+  AWS_REGION: us-east-1
+
+concurrency:
+  group: purge-transactional-data
+  cancel-in-progress: true
+
+jobs:
+  purge:
+    name: Purge (${{ inputs.dry_run && 'dry-run' || 'live' }})
+    runs-on: ubuntu-latest
+    # Uncomment and create environment "production" in repo settings for approval gates:
+    # environment: production
+    steps:
+      - name: Require one-time enablement secret
+        run: |
+          if [ "${{ secrets.PURGE_WORKFLOW_ENABLED }}" != "true" ]; then
+            echo "::error::Purge is disabled. Set repository secret PURGE_WORKFLOW_ENABLED=true only when you intend to run this one-time job. Remove the secret after purge."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Validate confirmation for live run
+        if: ${{ !inputs.dry_run }}
+        run: |
+          if [ "${{ inputs.confirm }}" != "PURGE" ]; then
+            echo "::error::Live purge requires workflow input confirm=PURGE"
+            exit 1
+          fi
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install purge dependencies
+        run: pip install -r scripts/requirements-purge.txt
+
+      - name: Run purge script
+        run: |
+          ARGS=(
+            --stack-name "${{ inputs.stack_name }}"
+            --region "${{ env.AWS_REGION }}"
+          )
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            ARGS+=(--dry-run)
+          else
+            ARGS+=(--confirm PURGE)
+          fi
+          if [ "${{ inputs.purge_invoices }}" = "true" ]; then
+            ARGS+=(--purge-invoices)
+          fi
+          if [ "${{ inputs.skip_cognito }}" = "true" ]; then
+            ARGS+=(--skip-cognito)
+          fi
+          if [ "${{ inputs.skip_dynamodb }}" = "true" ]; then
+            ARGS+=(--skip-dynamodb)
+          fi
+          python scripts/purge_transactional_data.py "${ARGS[@]}"
+
+      - name: Summary
+        if: always()
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "::notice title=Purge::Dry run finished. Re-run with dry_run=false and confirm=PURGE to apply."
+          else
+            echo "::warning title=Purge::Live purge completed for stack ${{ inputs.stack_name }}"
+            echo "::notice title=One-time cleanup::Remove secret PURGE_WORKFLOW_ENABLED and delete .github/workflows/purge-transactional-data.yml when done."
+          fi

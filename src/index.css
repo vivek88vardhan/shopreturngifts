@@ -1,0 +1,289 @@
+@import url('https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-primary: 222 47% 11%;
+    --color-secondary: 215 16% 47%;
+    --color-accent: 43 74% 49%;
+    --color-accent-hover: 43 74% 42%;
+
+    --background: 0 0% 100%;
+    --background-subtle: 210 40% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: var(--color-primary);
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: var(--color-accent);
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: var(--color-accent);
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5% 26%;
+    --sidebar-primary: 240 6% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 5% 96%;
+    --sidebar-accent-foreground: 240 6% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 43 74% 49%;
+
+    /* ShopReturnGifts specific tokens */
+    --sf-success: 142 71% 45%;
+    --sf-success-foreground: 0 0% 100%;
+    --sf-warning: 38 92% 50%;
+    --sf-warning-foreground: 0 0% 100%;
+    --sf-info: 199 89% 48%;
+    --sf-info-foreground: 0 0% 100%;
+
+    --sf-nav-height: 4rem;
+    --sf-container-max: 80rem;
+    --sf-transition-fast: 150ms;
+    --sf-transition-normal: 300ms;
+
+    --font-sans: 'Google Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+
+  .dark {
+    --background: 222 47% 5%;
+    --background-subtle: 222 47% 8%;
+    --foreground: 210 40% 98%;
+    --card: 222 47% 8%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222 47% 8%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 40% 98%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: var(--color-accent);
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217 33% 17%;
+    --input: 217 33% 17%;
+    --ring: var(--color-accent);
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    overflow-x: clip;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-family: var(--font-sans);
+    overflow-x: clip;
+    width: 100%;
+    min-height: 100dvh;
+    min-height: 100svh;
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+
+  #root {
+    width: 100%;
+    min-height: 100dvh;
+    min-height: 100svh;
+  }
+
+  img,
+  video,
+  picture {
+    max-width: 100%;
+  }
+}
+
+@layer components {
+  .sf-container {
+    @apply mx-auto w-full px-4 sm:px-6 lg:px-8;
+    max-width: var(--sf-container-max);
+  }
+
+  .sf-badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .sf-badge-pending {
+    @apply sf-badge bg-yellow-100 text-yellow-800;
+  }
+  .sf-badge-paid {
+    @apply sf-badge bg-blue-100 text-blue-800;
+  }
+  .sf-badge-processing {
+    @apply sf-badge bg-purple-100 text-purple-800;
+  }
+  .sf-badge-shipped {
+    @apply sf-badge bg-indigo-100 text-indigo-800;
+  }
+  .sf-badge-delivered {
+    @apply sf-badge bg-green-100 text-green-800;
+  }
+  .sf-badge-cancelled {
+    @apply sf-badge bg-red-100 text-red-800;
+  }
+
+  .sf-card {
+    @apply rounded-lg border bg-card p-6 shadow-sm transition-shadow;
+  }
+  .sf-card-hover {
+    @apply sf-card hover:shadow-md;
+  }
+
+  .font-display {
+    font-family: var(--font-sans);
+  }
+
+  .font-hero-headline {
+    font-family: var(--font-sans);
+  }
+
+  .home-glass {
+    @apply rounded-2xl border border-white/15 bg-white/10 shadow-2xl shadow-black/20 backdrop-blur-md;
+  }
+
+  .home-glass-card {
+    @apply rounded-2xl border border-border/60 bg-card/80 shadow-lg backdrop-blur-sm;
+  }
+}
+
+@keyframes hero-video-zoom {
+  from {
+    transform: scale(1.05);
+  }
+  to {
+    transform: scale(1.12);
+  }
+}
+
+.animate-hero-video-zoom {
+  animation: hero-video-zoom 28s ease-in-out infinite alternate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-hero-video-zoom {
+    animation: none;
+    transform: scale(1.05);
+  }
+}
+
+@keyframes bell-ring {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  10% {
+    transform: rotate(14deg);
+  }
+  20% {
+    transform: rotate(-12deg);
+  }
+  30% {
+    transform: rotate(10deg);
+  }
+  40% {
+    transform: rotate(-8deg);
+  }
+  50% {
+    transform: rotate(4deg);
+  }
+  60% {
+    transform: rotate(0);
+  }
+}
+
+.animate-bell-ring {
+  animation: bell-ring 0.9s ease-in-out;
+  transform-origin: top center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-bell-ring {
+    animation: none;
+  }
+}
+
+@keyframes error-peek-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes error-peek-to-bell {
+  from {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(28px, -52px) scale(0.25);
+  }
+}
+
+.animate-error-peek-in {
+  animation: error-peek-in 0.28s ease-out forwards;
+}
+
+.animate-error-peek-to-bell {
+  animation: error-peek-to-bell 0.65s ease-in forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-error-peek-in {
+    animation: none;
+  }
+  .animate-error-peek-to-bell {
+    animation: error-peek-fade-out 0.4s ease-out forwards;
+  }
+}
+
+@keyframes error-peek-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}

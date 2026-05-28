@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en" class="boot-pending">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script src="/bootstrap-theme.js"></script>
+    <style>
+      html.boot-pending,
+      html.boot-pending body {
+        background-color: #0f172a;
+      }
+      html.boot-pending #root {
+        visibility: hidden;
+      }
+      html.app-ready #root {
+        visibility: visible;
+      }
+      html,
+      body {
+        width: 100%;
+        overflow-x: clip;
+        -webkit-text-size-adjust: 100%;
+        font-family: 'Google Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+      #root {
+        width: 100%;
+        min-height: 100dvh;
+        min-height: 100svh;
+      }
+      img,
+      video {
+        max-width: 100%;
+      }
+    </style>
+    <title>ShopReturnGifts — Return gifts &amp; party favors</title>
+    <meta name="description" content="Curated return gifts and party favor bundles for birthdays, weddings, festivals, and every celebration. Shop at shopreturngifts.com." />
+    <meta name="author" content="ShopReturnGifts" />
+
+    <meta property="og:title" content="ShopReturnGifts" />
+    <meta property="og:description" content="Curated return gifts and party favor bundles for every celebration." />
+    <meta property="og:type" content="website" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@shopreturngifts" />
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

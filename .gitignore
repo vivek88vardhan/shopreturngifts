@@ -1,0 +1,40 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+.env
+backend/.env
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+backend/invoices/*.pdf
+.logs/*
+
+test-results/*
+scripts/test_order_endpoint.py
+scripts/setup-stripe-secrets.sh
+scripts/test-stripe-init.sh
+backend/bootstrap
+scripts/verify-stripe-secrets.sh
+backend/bootstrap.zip
+
+# Legacy kirana promo videos — upload ShopReturnGifts assets separately
+public/videos/*.mp4
