@@ -138,8 +138,15 @@ jobs:
             --query 'Stacks[0].StackStatus' \
             --output text 2>/dev/null || echo NOT_FOUND)
           if [ "$PROD_STATUS" != "NOT_FOUND" ]; then
-            echo "::error::Stack shopreturngifts-prod still exists (status: $PROD_STATUS). Delete it first — it owns resources this template also creates (shopreturngifts-api-prod, Cognito pool, etc.)."
-            echo "::error::Run: aws cloudformation delete-stack --stack-name shopreturngifts-prod --region $REGION"
+            echo "::error::Stack shopreturngifts-prod still exists (status: $PROD_STATUS)."
+            if [ "$PROD_STATUS" = "DELETE_FAILED" ]; then
+              echo "::error::DELETE_FAILED — CloudFormation could not remove some resources (often S3 buckets, CloudFront, or API custom domain)."
+              echo "::error::From your machine, run: bash scripts/cleanup-failed-stack.sh shopreturngifts-prod"
+              echo "::error::Or see failed resources: aws cloudformation describe-stack-events --stack-name shopreturngifts-prod --region $REGION --output table"
+            else
+              echo "::error::Delete it first — it owns resources this template also creates (shopreturngifts-api-prod, Cognito pool, etc.)."
+              echo "::error::Run: aws cloudformation delete-stack --stack-name shopreturngifts-prod --region $REGION"
+            fi
             exit 1
           fi
 
