@@ -4,7 +4,7 @@
 VITE_API_BASE_URL ?= http://localhost:9000/api
 STAGE ?= dev
 AWS_REGION ?= us-east-1
-STACK_NAME ?= shopreturngifts-prod
+STACK_NAME ?= shopreturngifts
 
 # Colors for output
 BLUE := \033[0;34m

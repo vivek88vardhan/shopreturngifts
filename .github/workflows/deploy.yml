@@ -8,7 +8,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  SAM_STACK_NAME: shopreturngifts-prod
+  SAM_STACK_NAME: shopreturngifts
   STAGE: prod
 
 jobs:
@@ -123,6 +123,20 @@ jobs:
             echo "::error::API_DOMAIN_NAME must be a hostname only (api.shopreturngifts.com), not a URL."
             exit 1
           fi
+
+      - name: Block deploy if legacy shopreturngifts stack still exists
+        run: |
+          LEGACY=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.SAM_STACK_NAME }} \
+            --query "Stacks[0].Outputs[?OutputKey=='SubscribeApiUrl'].OutputValue" \
+            --output text 2>/dev/null || true)
+          if [ -n "$LEGACY" ] && [ "$LEGACY" != "None" ]; then
+            echo "::error::Legacy stack '${{ env.SAM_STACK_NAME }}' (subscribe API + static site) must be deleted before deploying the e-commerce SAM template."
+            echo "::error::Run: aws cloudformation delete-stack --stack-name ${{ env.SAM_STACK_NAME }}"
+            echo "::error::Wait until DELETE_COMPLETE, then re-run this workflow."
+            exit 1
+          fi
+          echo "No legacy stack detected — OK to deploy SAM e-commerce stack."
 
       - name: SAM Deploy
         run: |

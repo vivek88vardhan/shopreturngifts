@@ -23,7 +23,7 @@ on:
       stack_name:
         description: CloudFormation stack name
         required: true
-        default: shopreturngifts-prod
+        default: shopreturngifts
         type: string
       dry_run:
         description: Dry run (no deletes)
