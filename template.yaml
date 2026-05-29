@@ -18,11 +18,19 @@ Parameters:
   FrontendDomain:
     Type: String
     Default: '*'
-    Description: Frontend domain for CORS (e.g., https://shop.example.com)
+    Description: >
+      CORS origin for S3 uploads and API Gateway (e.g., https://shopreturngifts.com).
+      When DomainName is set, CORS automatically uses https://DomainName instead.
   DomainName:
     Type: String
     Default: ''
-    Description: Custom domain name (e.g., shop.example.com). Leave empty to skip Route53+ACM.
+    Description: >
+      Storefront custom domain on CloudFront (e.g., shopreturngifts.com). Requires HostedZoneId.
+      Creates ACM cert, CloudFront alias, and Route53 A/AAAA records.
+  ApiDomainName:
+    Type: String
+    Default: ''
+    Description: Custom API domain on API Gateway (e.g., api.shop.example.com). Requires HostedZoneId.
   HostedZoneId:
     Type: String
     Default: ''
@@ -83,6 +91,9 @@ Parameters:
 
 Conditions:
   HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
+  HasApiDomain: !And
+    - !Not [!Equals [!Ref ApiDomainName, '']]
+    - !Not [!Equals [!Ref HostedZoneId, '']]
   HasCognitoDomain: !Not [!Equals [!Ref CognitoDomainPrefix, '']]
   HasGoogle: !And
     - !Not [!Equals [!Ref GoogleClientId, '']]
@@ -160,7 +171,11 @@ Resources:
         CorsRules:
           - AllowedHeaders: ['*']
             AllowedMethods: [GET, PUT]
-            AllowedOrigins: [!Ref FrontendDomain]
+            AllowedOrigins:
+              - !If
+                - HasCustomDomain
+                - !Sub 'https://${DomainName}'
+                - !Ref FrontendDomain
             MaxAge: 3600
 
   AssetsBucketPolicy:
@@ -296,6 +311,70 @@ Resources:
       AliasTarget:
         DNSName: !GetAtt FrontendDistribution.DomainName
         HostedZoneId: Z2FDTNDATAQYW2  # CloudFront hosted zone ID (constant)
+
+  DnsRecordAAAA:
+    Type: AWS::Route53::RecordSet
+    Condition: HasCustomDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt FrontendDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+
+  # ─── API Gateway custom domain (api.example.com → regional API Gateway) ───
+  ApiSSLCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: HasApiDomain
+    Properties:
+      DomainName: !Ref ApiDomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref ApiDomainName
+          HostedZoneId: !Ref HostedZoneId
+
+  ApiCustomDomain:
+    Type: AWS::ApiGateway::DomainName
+    Condition: HasApiDomain
+    Properties:
+      DomainName: !Ref ApiDomainName
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      RegionalCertificateArn: !Ref ApiSSLCertificate
+      SecurityPolicy: TLS_1_2
+
+  ApiBasePathMapping:
+    Type: AWS::ApiGateway::BasePathMapping
+    Condition: HasApiDomain
+    DependsOn: ApiGatewayStage
+    Properties:
+      DomainName: !Ref ApiCustomDomain
+      RestApiId: !Ref ApiGateway
+      Stage: !Ref Stage
+
+  ApiDnsRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasApiDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref ApiDomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ApiCustomDomain.RegionalDomainName
+        HostedZoneId: !GetAtt ApiCustomDomain.RegionalHostedZoneId
+
+  ApiDnsRecordAAAA:
+    Type: AWS::Route53::RecordSet
+    Condition: HasApiDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref ApiDomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt ApiCustomDomain.RegionalDomainName
+        HostedZoneId: !GetAtt ApiCustomDomain.RegionalHostedZoneId
 
   CognitoCustomMessageFunction:
     Type: AWS::Serverless::Function
@@ -618,12 +697,25 @@ Resources:
       Cors:
         AllowMethods: "'GET,POST,PUT,PATCH,DELETE,OPTIONS'"
         AllowHeaders: "'Content-Type,Authorization'"
-        AllowOrigin: !Sub "'${FrontendDomain}'"
+        AllowOrigin: !If
+          - HasCustomDomain
+          - !Sub "'https://${DomainName}'"
+          - !Sub "'${FrontendDomain}'"
 
 Outputs:
   ApiUrl:
     Description: API Gateway URL
     Value: !Sub https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Stage}
+
+  CustomApiUrl:
+    Description: Custom API domain (use as VITE_API_BASE_URL with /api suffix)
+    Condition: HasApiDomain
+    Value: !Sub https://${ApiDomainName}
+
+  FrontendApiBaseUrl:
+    Description: Frontend VITE_API_BASE_URL when custom API domain is configured
+    Condition: HasApiDomain
+    Value: !Sub https://${ApiDomainName}/api
 
   StripeWebhookUrl:
     Description: Stripe webhook endpoint URL

@@ -47,41 +47,11 @@ jobs:
           go mod tidy
           go test ./...
 
-  # ─── Frontend: Build & Deploy React App ───
-  frontend:
-    name: Build Frontend
-    runs-on: ubuntu-latest
-    needs: [test]
-    if: github.event_name == 'push'
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '24'
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Build
-        run: npm run build
-        env:
-          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
-          VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
-          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
-
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: frontend-dist
-          path: dist/
-          retention-days: 7
-
   # ─── Backend: SAM Build & Deploy ───
   backend:
     name: Deploy Backend
     runs-on: ubuntu-latest
-    needs: [frontend]
+    needs: [test]
     if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v5
@@ -106,6 +76,26 @@ jobs:
       - name: SAM Build
         run: sam build --template template.yaml
 
+      - name: Resolve domain parameters
+        run: |
+          # Storefront CORS + API allowed origins: prefer explicit secrets, else derive from DOMAIN_NAME.
+          if [ -n "${{ secrets.FRONTEND_DOMAIN }}" ]; then
+            echo "FRONTEND_DOMAIN=${{ secrets.FRONTEND_DOMAIN }}" >> $GITHUB_ENV
+          elif [ -n "${{ secrets.DOMAIN_NAME }}" ]; then
+            echo "FRONTEND_DOMAIN=https://${{ secrets.DOMAIN_NAME }}" >> $GITHUB_ENV
+          else
+            echo "FRONTEND_DOMAIN=*" >> $GITHUB_ENV
+          fi
+          if [ -n "${{ secrets.ALLOWED_ORIGINS }}" ]; then
+            echo "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}" >> $GITHUB_ENV
+          elif [ -n "${{ secrets.DOMAIN_NAME }}" ]; then
+            echo "ALLOWED_ORIGINS=https://${{ secrets.DOMAIN_NAME }}" >> $GITHUB_ENV
+          else
+            echo "ALLOWED_ORIGINS=*" >> $GITHUB_ENV
+          fi
+          echo "FrontendDomain (CORS): $FRONTEND_DOMAIN"
+          echo "AllowedOrigins (API middleware): $ALLOWED_ORIGINS"
+
       - name: SAM Deploy
         run: |
           sam deploy \
@@ -117,10 +107,13 @@ jobs:
             --no-fail-on-empty-changeset \
             --parameter-overrides \
               ParameterKey=Stage,ParameterValue=${{ env.STAGE }} \
-              ParameterKey=FrontendDomain,ParameterValue='${{ secrets.FRONTEND_DOMAIN || '*' }}' \
+              ParameterKey=FrontendDomain,ParameterValue='${{ env.FRONTEND_DOMAIN }}' \
+              ParameterKey=DomainName,ParameterValue='${{ secrets.DOMAIN_NAME }}' \
+              ParameterKey=ApiDomainName,ParameterValue='${{ secrets.API_DOMAIN_NAME }}' \
+              ParameterKey=HostedZoneId,ParameterValue='${{ secrets.HOSTED_ZONE_ID }}' \
               ParameterKey=ContactFromEmail,ParameterValue='${{ secrets.CONTACT_FROM_EMAIL }}' \
               ParameterKey=ContactToEmail,ParameterValue='${{ secrets.CONTACT_TO_EMAIL }}' \
-              ParameterKey=AllowedOrigins,ParameterValue='${{ secrets.ALLOWED_ORIGINS || '*' }}' \
+              ParameterKey=AllowedOrigins,ParameterValue='${{ env.ALLOWED_ORIGINS }}' \
               ParameterKey=CognitoDomainPrefix,ParameterValue='${{ secrets.COGNITO_DOMAIN_PREFIX }}' \
               ParameterKey=GoogleClientId,ParameterValue='${{ secrets.GOOGLE_CLIENT_ID }}' \
               ParameterKey=GoogleClientSecret,ParameterValue='${{ secrets.GOOGLE_CLIENT_SECRET }}'
@@ -138,16 +131,88 @@ jobs:
             --stack-name ${{ env.SAM_STACK_NAME }} \
             --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
             --output text)
+          CUSTOM_API=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.SAM_STACK_NAME }} \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendApiBaseUrl'].OutputValue" \
+            --output text)
           DOCS_URL="${API_URL}/api/docs"
           echo "Backend API base URL: ${API_URL}"
+          if [ -n "$CUSTOM_API" ] && [ "$CUSTOM_API" != "None" ]; then
+            echo "Custom API (VITE_API_BASE_URL): ${CUSTOM_API}"
+            echo "::notice title=Frontend API URL::${CUSTOM_API}"
+          fi
           echo "Backend API docs URL: ${DOCS_URL}"
           echo "::notice title=Backend API Docs::${DOCS_URL}"
+          SITE_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.SAM_STACK_NAME }} \
+            --query "Stacks[0].Outputs[?OutputKey=='WebsiteUrl'].OutputValue" \
+            --output text)
+          echo "Storefront URL: ${SITE_URL}"
+          echo "::notice title=Storefront URL::${SITE_URL}"
+
+  # ─── Frontend: Build React App (after backend so API URL comes from stack) ───
+  frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    needs: [backend]
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve VITE_API_BASE_URL
+        id: api
+        run: |
+          CUSTOM_API=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.SAM_STACK_NAME }} \
+            --query "Stacks[0].Outputs[?OutputKey=='FrontendApiBaseUrl'].OutputValue" \
+            --output text 2>/dev/null || true)
+          if [ -n "$CUSTOM_API" ] && [ "$CUSTOM_API" != "None" ]; then
+            echo "base_url=$CUSTOM_API" >> $GITHUB_OUTPUT
+            echo "Using custom API domain: $CUSTOM_API"
+          elif [ -n "${{ secrets.VITE_API_BASE_URL }}" ]; then
+            echo "base_url=${{ secrets.VITE_API_BASE_URL }}" >> $GITHUB_OUTPUT
+            echo "Using VITE_API_BASE_URL secret"
+          else
+            EXEC_API=$(aws cloudformation describe-stacks \
+              --stack-name ${{ env.SAM_STACK_NAME }} \
+              --query "Stacks[0].Outputs[?OutputKey=='ApiUrl'].OutputValue" \
+              --output text)
+            echo "base_url=${EXEC_API}/api" >> $GITHUB_OUTPUT
+            echo "Using execute-api URL: ${EXEC_API}/api"
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: ${{ steps.api.outputs.base_url }}
+          VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: frontend-dist
+          path: dist/
+          retention-days: 7
 
   # ─── Deploy Frontend to S3 + CloudFront ───
   deploy-frontend:
     name: Deploy Frontend to S3 + CloudFront
     runs-on: ubuntu-latest
-    needs: [backend]
+    needs: [frontend]
     if: github.event_name == 'push'
     steps:
       - uses: aws-actions/configure-aws-credentials@v6
