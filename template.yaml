@@ -34,7 +34,9 @@ Parameters:
   HostedZoneId:
     Type: String
     Default: ''
-    Description: Route53 Hosted Zone ID for the domain. Required if DomainName is set.
+    Description: >
+      Route53 hosted zone ID for shopreturngifts.com (required when DomainName or
+      ApiDomainName is set). Example Z0123456789ABC.
   ContactFromEmail:
     Type: String
     Default: 'shopreturngifts.az@gmail.com'
@@ -90,7 +92,10 @@ Parameters:
     Description: Google OAuth client secret.
 
 Conditions:
-  HasCustomDomain: !Not [!Equals [!Ref DomainName, '']]
+  HasHostedZone: !Not [!Equals [!Ref HostedZoneId, '']]
+  HasCustomDomain: !And
+    - !Not [!Equals [!Ref DomainName, '']]
+    - !Not [!Equals [!Ref HostedZoneId, '']]
   HasApiDomain: !And
     - !Not [!Equals [!Ref ApiDomainName, '']]
     - !Not [!Equals [!Ref HostedZoneId, '']]

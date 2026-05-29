@@ -96,6 +96,34 @@ jobs:
           echo "FrontendDomain (CORS): $FRONTEND_DOMAIN"
           echo "AllowedOrigins (API middleware): $ALLOWED_ORIGINS"
 
+      - name: Validate domain secrets
+        run: |
+          DOMAIN='${{ secrets.DOMAIN_NAME }}'
+          API='${{ secrets.API_DOMAIN_NAME }}'
+          ZONE='${{ secrets.HOSTED_ZONE_ID }}'
+          if [ -n "$DOMAIN" ] || [ -n "$API" ]; then
+            if [ -z "$ZONE" ]; then
+              echo "::error::Set GitHub secret HOSTED_ZONE_ID (Route53 zone for shopreturngifts.com). Required when DOMAIN_NAME or API_DOMAIN_NAME is set."
+              exit 1
+            fi
+            ZONE="${ZONE#/hostedzone/}"
+            if ! aws route53 get-hosted-zone --id "$ZONE" >/dev/null 2>&1; then
+              echo "::error::HOSTED_ZONE_ID '$ZONE' not found in Route53. In AWS Console: Route53 → Hosted zones → copy the ID for shopreturngifts.com."
+              exit 1
+            fi
+            echo "Route53 hosted zone OK: $ZONE"
+          else
+            echo "No custom domains configured (DOMAIN_NAME / API_DOMAIN_NAME empty)."
+          fi
+          if [ -n "$DOMAIN" ] && [[ "$DOMAIN" == http* ]]; then
+            echo "::error::DOMAIN_NAME must be a hostname only (shopreturngifts.com), not a URL."
+            exit 1
+          fi
+          if [ -n "$API" ] && [[ "$API" == http* ]]; then
+            echo "::error::API_DOMAIN_NAME must be a hostname only (api.shopreturngifts.com), not a URL."
+            exit 1
+          fi
+
       - name: SAM Deploy
         run: |
           sam deploy \
