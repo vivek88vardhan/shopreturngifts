@@ -78,23 +78,26 @@ jobs:
 
       - name: Resolve domain parameters
         run: |
-          # Storefront CORS + API allowed origins: prefer explicit secrets, else derive from DOMAIN_NAME.
-          if [ -n "${{ secrets.FRONTEND_DOMAIN }}" ]; then
-            echo "FRONTEND_DOMAIN=${{ secrets.FRONTEND_DOMAIN }}" >> $GITHUB_ENV
-          elif [ -n "${{ secrets.DOMAIN_NAME }}" ]; then
-            echo "FRONTEND_DOMAIN=https://${{ secrets.DOMAIN_NAME }}" >> $GITHUB_ENV
+          trim() { echo -n "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
+          FRONTEND_SECRET=$(trim '${{ secrets.FRONTEND_DOMAIN }}')
+          DOMAIN_SECRET=$(trim '${{ secrets.DOMAIN_NAME }}')
+          ALLOWED_SECRET=$(trim '${{ secrets.ALLOWED_ORIGINS }}')
+          if [ -n "$FRONTEND_SECRET" ]; then
+            echo "FRONTEND_DOMAIN=$FRONTEND_SECRET" >> $GITHUB_ENV
+          elif [ -n "$DOMAIN_SECRET" ]; then
+            echo "FRONTEND_DOMAIN=https://${DOMAIN_SECRET}" >> $GITHUB_ENV
           else
             echo "FRONTEND_DOMAIN=*" >> $GITHUB_ENV
           fi
-          if [ -n "${{ secrets.ALLOWED_ORIGINS }}" ]; then
-            echo "ALLOWED_ORIGINS=${{ secrets.ALLOWED_ORIGINS }}" >> $GITHUB_ENV
-          elif [ -n "${{ secrets.DOMAIN_NAME }}" ]; then
-            echo "ALLOWED_ORIGINS=https://${{ secrets.DOMAIN_NAME }}" >> $GITHUB_ENV
+          if [ -n "$ALLOWED_SECRET" ]; then
+            echo "ALLOWED_ORIGINS=$ALLOWED_SECRET" >> $GITHUB_ENV
+          elif [ -n "$DOMAIN_SECRET" ]; then
+            echo "ALLOWED_ORIGINS=https://${DOMAIN_SECRET}" >> $GITHUB_ENV
           else
             echo "ALLOWED_ORIGINS=*" >> $GITHUB_ENV
           fi
-          echo "FrontendDomain (CORS): $FRONTEND_DOMAIN"
-          echo "AllowedOrigins (API middleware): $ALLOWED_ORIGINS"
+          echo "FrontendDomain (CORS): $(trim "${FRONTEND_DOMAIN:-}")"
+          echo "AllowedOrigins (API middleware): $(trim "${ALLOWED_ORIGINS:-}")"
 
       - name: Validate domain secrets
         run: |
@@ -206,18 +209,19 @@ jobs:
           P_GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
         run: |
           set -euo pipefail
-          # SAM rejects empty values (e.g. ContactFromEmail=). Omit unset secrets; template defaults apply.
-          PARAMS=(
-            "Stage=${P_STAGE}"
-            "FrontendDomain=${P_FRONTEND_DOMAIN}"
-            "AllowedOrigins=${P_ALLOWED_ORIGINS}"
-          )
+          trim() { echo -n "$1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'; }
+          # SAM rejects empty/whitespace values (e.g. AllowedOrigins= ). Omit blank; template defaults apply.
+          PARAMS=()
           add_param() {
-            local key="$1" val="$2"
+            local key="$1" val
+            val="$(trim "$2")"
             if [ -n "$val" ]; then
               PARAMS+=("${key}=${val}")
             fi
           }
+          add_param Stage "${P_STAGE:-prod}"
+          add_param FrontendDomain "${P_FRONTEND_DOMAIN:-*}"
+          add_param AllowedOrigins "${P_ALLOWED_ORIGINS:-*}"
           add_param DomainName "$P_DOMAIN_NAME"
           add_param ApiDomainName "$P_API_DOMAIN_NAME"
           add_param HostedZoneId "$P_HOSTED_ZONE_ID"
@@ -226,7 +230,11 @@ jobs:
           add_param CognitoDomainPrefix "$P_COGNITO_PREFIX"
           add_param GoogleClientId "$P_GOOGLE_CLIENT_ID"
           add_param GoogleClientSecret "$P_GOOGLE_CLIENT_SECRET"
-          echo "SAM parameters: ${PARAMS[*]}"
+          if [ "${#PARAMS[@]}" -eq 0 ]; then
+            echo "::error::No SAM parameters to deploy with"
+            exit 1
+          fi
+          echo "SAM parameters (${#PARAMS[@]}): ${PARAMS[*]}"
           sam deploy \
             --stack-name ${{ env.SAM_STACK_NAME }} \
             --region ${{ env.AWS_REGION }} \
