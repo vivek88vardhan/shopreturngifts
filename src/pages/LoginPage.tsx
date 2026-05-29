@@ -11,6 +11,7 @@ import {
   getVerifyPurpose,
   isEmailNotVerifiedError,
   parseAuthErrorResponse,
+  parseAuthSuccessResponse,
   rememberPendingVerificationEmail,
   requestForgotPassword,
   setVerifyPurpose,
@@ -18,6 +19,7 @@ import {
   type VerifyPurpose,
 } from '@/lib/authApi';
 import { useAuthStore } from '@/stores/authStore';
+import type { User } from '@/types';
 import { toast } from '@/lib/inboxToast';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { Mail, KeyRound, Eye, EyeOff } from 'lucide-react';
@@ -187,7 +189,7 @@ export default function LoginPage() {
         throw new Error(err.message || err.raw || 'Login failed');
       }
 
-      const data = await res.json();
+      const data = await parseAuthSuccessResponse<{ token: string; user: User }>(res);
       clearPendingVerificationEmail();
       setAuth(data.user, data.token);
       toast.success('Welcome back!');
@@ -221,7 +223,7 @@ export default function LoginPage() {
       throw new Error(err.message || 'Login failed after verification');
     }
 
-    const data = await loginRes.json();
+    const data = await parseAuthSuccessResponse<{ token: string; user: User }>(loginRes);
     clearPendingVerificationEmail();
     setAuth(data.user, data.token);
     navigate(afterLoginPath);

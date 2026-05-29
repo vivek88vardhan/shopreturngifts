@@ -24,6 +24,31 @@ export async function parseAuthErrorResponse(res: Response): Promise<AuthApiErro
   return { raw, message: raw };
 }
 
+/**
+ * Parse a successful (2xx) auth response body as JSON.
+ * Unlike res.json(), this never throws the cryptic WebKit error
+ * ("The string did not match the expected pattern.") when the body is
+ * empty or HTML. Instead it raises a clear, actionable error — which
+ * almost always means API_BASE_URL is pointing at the SPA/CloudFront
+ * instead of the API, or a proxy returned an HTML error page.
+ */
+export async function parseAuthSuccessResponse<T>(res: Response): Promise<T> {
+  const raw = (await res.text()).trim();
+  if (!raw) {
+    throw new Error('Server returned an empty response. Please try again.');
+  }
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    const looksLikeHtml = raw.startsWith('<');
+    throw new Error(
+      looksLikeHtml
+        ? 'Unexpected response from the server (received a web page, not data). The API address may be misconfigured.'
+        : 'Unexpected response from the server. Please try again.'
+    );
+  }
+}
+
 export function isEmailNotVerifiedError(err: AuthApiError & { raw?: string }): boolean {
   if (err.error === 'email_not_verified') return true;
   const text = `${err.raw ?? ''} ${err.message ?? ''}`.toLowerCase();

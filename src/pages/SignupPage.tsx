@@ -7,9 +7,11 @@ import { API_BASE_URL } from '@/lib/api';
 import {
   clearPendingVerificationEmail,
   getPendingVerificationEmail,
+  parseAuthSuccessResponse,
   rememberPendingVerificationEmail,
 } from '@/lib/authApi';
 import { useAuthStore } from '@/stores/authStore';
+import type { User } from '@/types';
 import { toast } from '@/lib/inboxToast';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { CheckCircle2, Mail } from 'lucide-react';
@@ -51,8 +53,8 @@ export default function SignupPage() {
         throw new Error(err || 'Signup failed');
       }
 
-      const data = await res.json();
-      if (data.token) {
+      const data = await parseAuthSuccessResponse<{ token?: string; user?: User }>(res);
+      if (data.token && data.user) {
         // Auto-verified (dev mode)
         setAuth(data.user, data.token);
         toast.success('Account created!');
@@ -148,7 +150,7 @@ export default function SignupPage() {
         return;
       }
 
-      const data = await res.json();
+      const data = await parseAuthSuccessResponse<{ token: string; user: User }>(res);
       setAuth(data.user, data.token);
       toast.success('Welcome to ShopReturnGifts!');
       navigate('/');
