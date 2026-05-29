@@ -7,7 +7,7 @@ This guide covers creating Google OAuth credentials and wiring them into KiranaB
 ## 1. Prerequisites
 
 - A Google account with access to [Google Cloud Console](https://console.cloud.google.com/)
-- KiranaBandi deployed to AWS (stack: `shopreturngifts-prod`)
+- KiranaBandi deployed to AWS (stack: `shopreturngifts`)
 - Cognito domain prefix chosen (e.g. `shopreturngifts-3951-prod`)
 
 ---
@@ -88,7 +88,7 @@ cd backend && make build && cd ..
 sam build --template template.yaml
 
 sam deploy \
-  --stack-name shopreturngifts-prod \
+  --stack-name shopreturngifts \
   --region us-east-1 \
   --resolve-s3 \
   --capabilities CAPABILITY_IAM \
@@ -176,4 +176,4 @@ https://shopreturngifts-3951-prod.auth.us-east-1.amazoncognito.com/login?client_
 | Cognito Domain Prefix | `shopreturngifts-3951-prod` |
 | Cognito Redirect URI | `https://shopreturngifts-3951-prod.auth.us-east-1.amazoncognito.com/oauth2/idpresponse` |
 | AWS Region | `us-east-1` |
-| SAM Stack | `shopreturngifts-prod` |
+| SAM Stack | `shopreturngifts` |

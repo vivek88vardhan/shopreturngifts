@@ -80,7 +80,7 @@ Parameters:
   CognitoDomainPrefix:
     Type: String
     Default: ''
-    Description: Cognito hosted-UI domain prefix (e.g. shopreturngifts-prod). Leave empty to skip OAuth.
+    Description: Cognito hosted-UI domain prefix (e.g. shopreturngifts). Leave empty to skip OAuth.
   GoogleClientId:
     Type: String
     Default: ''

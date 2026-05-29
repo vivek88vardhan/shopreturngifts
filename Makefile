@@ -4,6 +4,7 @@
 VITE_API_BASE_URL ?= http://localhost:9000/api
 STAGE ?= dev
 AWS_REGION ?= us-east-1
+# CloudFormation stack name (single source of truth for AWS deploy)
 STACK_NAME ?= shopreturngifts
 
 # Colors for output

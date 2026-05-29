@@ -640,7 +640,7 @@ Defines request/response structs:
 
 ### 6.1 Table Structure
 
-**Single DynamoDB Table:** `shopreturngifts-{stage}` (e.g., `shopreturngifts-prod`)
+**Single DynamoDB Table:** output `TableName` from CloudFormation stack `shopreturngifts`
 
 **Partition Key (PK):** Entity type + ID (e.g., `PRODUCT#abc123`)
 **Sort Key (SK):** Entity type + ID or metadata (e.g., `PRODUCT#abc123`, `METADATA#created`)
@@ -843,7 +843,7 @@ bun run preview
 **Environment Variables (.env.local):**
 
 ```
-VITE_API_BASE_URL=https://f3b2i8loe5.execute-api.us-east-1.amazonaws.com/prod/api
+VITE_API_BASE_URL=https://api.shopreturngifts.com/api
 VITE_STRIPE_PUBLIC_KEY=pk_test_...
 ```
 
@@ -872,7 +872,7 @@ make clean
 **Environment Variables (.env / Lambda):**
 
 ```
-TABLE_NAME=shopreturngifts-prod
+TABLE_NAME=shopreturngifts
 S3_BUCKET=shopreturngifts-store-assets-prod
 COGNITO_USER_POOL_ID=us-east-1_xxxxx
 COGNITO_APP_CLIENT_ID=xxxxx
@@ -995,7 +995,7 @@ make build
 # Deploy via SAM
 sam deploy \
   --template-file ../template.yaml \
-  --stack-name shopreturngifts-prod \
+  --stack-name shopreturngifts \
   --s3-bucket shopreturngifts-artifacts \
   --region us-east-1 \
   --capabilities CAPABILITY_IAM CAPABILITY_AUTO_EXPAND_MACRO \
@@ -1821,7 +1821,7 @@ func (h *Handlers) MyHandler(w http.ResponseWriter, r *http.Request) {
 
 ❌ **Wrong:**
 ```go
-const TABLE_NAME = "shopreturngifts-prod"
+const TABLE_NAME = "shopreturngifts"
 ```
 
 ✅ **Right:**

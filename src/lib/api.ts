@@ -1,11 +1,11 @@
 // API Configuration
 // Set VITE_API_BASE_URL in your .env file to point to your Go Lambda API
-// e.g. VITE_API_BASE_URL=https://shop.example.com/prod (or .../prod/api)
+// e.g. VITE_API_BASE_URL=https://api.shopreturngifts.com/api
 
 import { queryClient } from '@/lib/queryClient';
 import { useAuthStore } from '@/stores/authStore';
 
-const DEFAULT_API_BASE_URL = 'https://f3b2i8loe5.execute-api.us-east-1.amazonaws.com/prod/api';
+const DEFAULT_API_BASE_URL = 'https://api.shopreturngifts.com/api';
 
 function normalizeApiBaseUrl(rawBaseUrl: string): string {
   const baseUrl = rawBaseUrl.trim().replace(/\/+$/, '');

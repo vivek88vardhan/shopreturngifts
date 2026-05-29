@@ -120,7 +120,7 @@ All routes under `/api`. Full OpenAPI served at `GET /api/openapi.json`.
 
 | Variable | Purpose |
 |---|---|
-| `TABLE_NAME` | DynamoDB table (e.g., `shopreturngifts-prod`) |
+| `TABLE_NAME` | DynamoDB table (from stack `TableName` output) |
 | `S3_BUCKET` | Asset bucket name |
 | `COGNITO_USER_POOL_ID` | Auth pool |
 | `COGNITO_APP_CLIENT_ID` | Auth client |

@@ -317,13 +317,17 @@ Set the following environment variables (or export them in your shell):
 ```sh
 export AWS_PROFILE=your-profile        # AWS CLI profile with access to DynamoDB, S3, Cognito
 export AWS_REGION=us-east-1            # Region where your stack is deployed
-export TABLE_NAME=shopreturngifts-prod       # DynamoDB table name (from SAM stack output)
-export S3_BUCKET=shopreturngifts-assets-prod-123456789  # S3 assets bucket (from SAM stack output)
-export COGNITO_USER_POOL_ID=us-east-1_xxxxxxx     # Cognito User Pool ID (from SAM stack output)
-export COGNITO_APP_CLIENT_ID=xxxxxxxxxxxxxxxxxx    # Cognito App Client ID (from SAM stack output)
+export TABLE_NAME=<from stack TableName output>       # e.g. shopreturngifts-AppTable-XXXX
+export S3_BUCKET=<from stack AssetsBucket output>
+export COGNITO_USER_POOL_ID=<from stack UserPoolId output>
+export COGNITO_APP_CLIENT_ID=<from stack UserPoolClientId output>
 ```
 
-> **Tip:** Run `aws cloudformation describe-stacks --stack-name shopreturngifts --query "Stacks[0].Outputs"` to get all values from your deployed stack.
+> **Single AWS stack:** `shopreturngifts` (us-east-1). Get all outputs:
+>
+> ```sh
+> aws cloudformation describe-stacks --stack-name shopreturngifts --query 'Stacks[0].Outputs' --output table
+> ```
 
 Then start the local API:
 

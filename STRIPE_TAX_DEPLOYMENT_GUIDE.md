@@ -163,7 +163,7 @@ sam build --template ../template.yaml
 
 ```bash
 sam deploy \
-  --stack-name shopreturngifts-prod \
+  --stack-name shopreturngifts \
   --region us-east-1 \
   --resolve-s3 \
   --capabilities CAPABILITY_IAM \
@@ -173,7 +173,7 @@ sam deploy \
     ContactFromEmail='noreply@yourdomain.com' \
     ContactToEmail='support@yourdomain.com' \
     AllowedOrigins='https://yourdomain.com' \
-    CognitoDomainPrefix='shopreturngifts-prod' \
+    CognitoDomainPrefix='shopreturngifts' \
     GoogleClientId='your-google-client-id' \
     GoogleClientSecret='your-google-client-secret'
 ```
@@ -183,7 +183,7 @@ sam deploy \
 ```bash
 npm install
 npm run build
-aws s3 sync dist/ s3://shopreturngifts-prod-frontendbucket-xxxx/ --delete
+aws s3 sync dist/ s3://shopreturngifts-frontendbucket-xxxx/ --delete
 aws cloudfront create-invalidation --distribution-id EXXXX --paths "/*"
 ```
 
@@ -214,8 +214,8 @@ aws cloudfront create-invalidation --distribution-id EXXXX --paths "/*"
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `TABLE_NAME` | DynamoDB table | `shopreturngifts-prod-AppTable-ABC123` |
-| `S3_BUCKET` | Assets bucket | `shopreturngifts-prod-assetsbucket-xyz` |
+| `TABLE_NAME` | DynamoDB table | `shopreturngifts-AppTable-ABC123` |
+| `S3_BUCKET` | Assets bucket | `shopreturngifts-assetsbucket-xyz` |
 | `COGNITO_USER_POOL_ID` | Cognito pool | `us-east-1_ABC123DEF` |
 | `STRIPE_SECRET_KEY` | Stripe secret (from Secrets Manager) | `sk_live_...` |
 | `STRIPE_WEBHOOK_SECRET` | Webhook secret | `whsec_...` |
@@ -239,7 +239,7 @@ VITE_API_BASE_URL: https://api.yourdomain.com/api
 FRONTEND_DOMAIN: https://yourdomain.com
 CONTACT_FROM_EMAIL: noreply@yourdomain.com
 CONTACT_TO_EMAIL: support@yourdomain.com
-COGNITO_DOMAIN_PREFIX: shopreturngifts-prod
+COGNITO_DOMAIN_PREFIX: shopreturngifts
 GOOGLE_CLIENT_ID: your-google-client-id
 GOOGLE_CLIENT_SECRET: your-google-client-secret
 ```
@@ -352,7 +352,7 @@ VITE_STRIPE_PUBLISHABLE_KEY=pk_live_...
 ```bash
 # Verify in DynamoDB:
 aws dynamodb get-item \
-  --table-name shopreturngifts-prod-AppTable \
+  --table-name shopreturngifts-AppTable \
   --key '{"PK":{"S":"CONFIG"},"SK":{"S":"CONFIG"}}'
 # Should show "StripeAutoTaxEnabled: true/false"
 ```
@@ -398,7 +398,7 @@ For issues or questions:
 - [ ] Build backend: `sam build`
 - [ ] Deploy to staging first: `sam deploy --stack-name shopreturngifts-staging`
 - [ ] Test in staging environment
-- [ ] Deploy to production: `sam deploy --stack-name shopreturngifts-prod`
+- [ ] Deploy to production: `sam deploy --stack-name shopreturngifts`
 
 ### Post-Deployment
 - [ ] Verify API is responding
