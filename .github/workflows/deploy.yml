@@ -8,7 +8,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  SAM_STACK_NAME: shopreturngifts
+  SAM_STACK_NAME: shopreturngifts-prod
   STAGE: prod
 
 jobs:

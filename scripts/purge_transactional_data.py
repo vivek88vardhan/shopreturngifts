@@ -15,7 +15,7 @@ Optional: S3 invoices/ prefix (--purge-invoices).
 
 Usage:
   python scripts/purge_transactional_data.py --dry-run
-  python scripts/purge_transactional_data.py --confirm PURGE --stack-name shopreturngifts
+  python scripts/purge_transactional_data.py --confirm PURGE --stack-name shopreturngifts-prod
 """
 
 from __future__ import annotations
@@ -322,7 +322,7 @@ def purge_s3_invoices(s3, bucket: str, dry_run: bool) -> int:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Purge ShopReturnGifts transactional data")
-    p.add_argument("--stack-name", default="shopreturngifts", help="CloudFormation stack name")
+    p.add_argument("--stack-name", default="shopreturngifts-prod", help="CloudFormation stack name")
     p.add_argument("--table-name", help="DynamoDB table (default: from stack output)")
     p.add_argument("--user-pool-id", help="Cognito pool (default: from stack output)")
     p.add_argument("--assets-bucket", help="S3 assets bucket (default: from stack output)")
