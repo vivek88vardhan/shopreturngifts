@@ -114,6 +114,15 @@ type User struct {
 	AuthProvider string `json:"authProvider,omitempty" dynamodbav:"-"`
 }
 
+// EngravingDetails holds the personalization a customer provides for products
+// in the "Custom" category (name to engrave, custom message, and one uploaded
+// high-resolution image). These are mandatory for custom/engraving products.
+type EngravingDetails struct {
+	Name     string `json:"name,omitempty" dynamodbav:"Name,omitempty"`
+	Message  string `json:"message,omitempty" dynamodbav:"Message,omitempty"`
+	ImageURL string `json:"imageUrl,omitempty" dynamodbav:"ImageUrl,omitempty"`
+}
+
 // OrderItem represents an item within an order.
 type OrderItem struct {
 	ProductID string  `json:"productId" dynamodbav:"ProductId"`
@@ -122,6 +131,8 @@ type OrderItem struct {
 	UnitPrice float64 `json:"unitPrice" dynamodbav:"UnitPrice"`
 	LineTotal float64 `json:"lineTotal" dynamodbav:"LineTotal"`
 	IsFreebie bool    `json:"isFreebie,omitempty" dynamodbav:"IsFreebie,omitempty"`
+	// Engraving carries personalization details for custom-category products.
+	Engraving *EngravingDetails `json:"engraving,omitempty" dynamodbav:"Engraving,omitempty"`
 }
 
 // Order represents a customer order.
@@ -219,6 +230,9 @@ type StoreConfig struct {
 	WhatsappURL     string `json:"whatsappUrl,omitempty" dynamodbav:"WhatsappUrl,omitempty"`
 	InstagramURL    string `json:"instagramUrl,omitempty" dynamodbav:"InstagramUrl,omitempty"`
 	FacebookURL     string `json:"facebookUrl,omitempty" dynamodbav:"FacebookUrl,omitempty"`
+	// InstagramReelUrls are Instagram reel/post permalinks pasted by the admin;
+	// the homepage "Real Party Moments" section embeds these when set.
+	InstagramReelUrls []string `json:"instagramReelUrls,omitempty" dynamodbav:"InstagramReelUrls,omitempty"`
 
 	// ─── Analytics ───
 	GoogleAnalyticsID string `json:"googleAnalyticsId,omitempty" dynamodbav:"GoogleAnalyticsId,omitempty"`
@@ -320,8 +334,9 @@ type CreateOrderRequest struct {
 }
 
 type CreateOrderItem struct {
-	ProductID string `json:"productId"`
-	Qty       int    `json:"qty"`
+	ProductID string            `json:"productId"`
+	Qty       int               `json:"qty"`
+	Engraving *EngravingDetails `json:"engraving,omitempty"`
 }
 
 type CreateOrderResponse struct {

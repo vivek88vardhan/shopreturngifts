@@ -36,5 +36,5 @@ backend/bootstrap
 scripts/verify-stripe-secrets.sh
 backend/bootstrap.zip
 
-# Legacy kirana promo videos — upload ShopReturnGifts assets separately
-public/videos/*.mp4
+# Legacy kirana promo only
+public/videos/kiranabandi.mp4

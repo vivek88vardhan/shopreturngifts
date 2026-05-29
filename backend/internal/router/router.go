@@ -108,6 +108,10 @@ func New(h *handlers.Handlers, auth *middleware.Auth) *chi.Mux {
 			r.Post("/orders/{orderId}/cancel", h.CancelOrder)
 			r.Get("/orders/{orderId}/invoice", h.GetInvoice)
 
+			// Customer engraving image upload (presigned S3 PUT URL) for
+			// Custom-category products. Rate-limited to prevent abuse.
+			r.With(middleware.RateLimitMiddleware(30, time.Minute)).Post("/uploads/engraving-image-url", h.GetEngravingImageUploadURL)
+
 			// Authenticated coupon helpers (per-user awareness).
 			r.With(middleware.RateLimitMiddleware(30, time.Minute)).Get("/coupons/validate", h.ValidateCoupon)
 			r.Get("/coupons/best", h.GetBestCoupon)

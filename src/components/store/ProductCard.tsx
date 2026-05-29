@@ -1,9 +1,10 @@
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import type { Product } from '@/types';
 import { ProductPriceDisplay } from '@/components/store/ProductPriceDisplay';
 import { useCartStore } from '@/stores/cartStore';
-import { ShoppingCart, Package } from 'lucide-react';
+import { ShoppingCart, Package, Sparkles } from 'lucide-react';
 import { toast } from '@/lib/inboxToast';
+import { isCustomProduct } from '@/lib/customProduct';
 
 interface Props {
   product: Product;
@@ -11,12 +12,19 @@ interface Props {
 
 export default function ProductCard({ product }: Props) {
   const addItem = useCartStore((s) => s.addItem);
+  const navigate = useNavigate();
+  const custom = isCustomProduct(product);
 
   const handleAdd = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (product.stock <= 0) {
       toast.error('This product is out of stock');
+      return;
+    }
+    // Custom-category items require engraving details collected on the detail page.
+    if (custom) {
+      navigate(`/products/${encodeURIComponent(product.productId)}`);
       return;
     }
     addItem(product, 1);
@@ -39,9 +47,10 @@ export default function ProductCard({ product }: Props) {
             onClick={handleAdd}
             disabled={product.stock <= 0}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-accent-foreground shadow-lg transition-transform hover:scale-110 disabled:opacity-40 disabled:hover:scale-100"
-            aria-label="Add to cart"
+            aria-label={custom ? 'Personalize and add to cart' : 'Add to cart'}
+            title={custom ? 'Personalize' : 'Add to cart'}
           >
-            <ShoppingCart className="h-4 w-4" />
+            {custom ? <Sparkles className="h-4 w-4" /> : <ShoppingCart className="h-4 w-4" />}
           </button>
         </div>
       </div>

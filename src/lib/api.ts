@@ -265,7 +265,7 @@ export const ordersApi = {
   getOrder: async (orderId: string) =>
     sanitizeOrder(await request<Order>(`/orders/${normalizeOrderId(orderId)}`)),
 
-  createOrder: (data: { items: { productId: string; qty: number }[]; shippingAddress: import('@/types').Address; couponCode?: string }) =>
+  createOrder: (data: { items: { productId: string; qty: number; engraving?: import('@/types').EngravingDetails }[]; shippingAddress: import('@/types').Address; couponCode?: string }) =>
     request<import('@/types').CreateOrderResponse>('/orders', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -294,6 +294,17 @@ export const ordersApi = {
       subtotal != null && subtotal > 0 ? `?subtotal=${encodeURIComponent(String(subtotal))}` : '';
     return request<import('@/types').Coupon>(`/coupons/best${qs}`);
   },
+};
+
+// ─── Uploads API (authenticated customer uploads) ───
+
+export const uploadsApi = {
+  /** Get a presigned S3 PUT URL for a customer's engraving image. */
+  getEngravingImageUploadUrl: (ext: string) =>
+    request<{ uploadUrl: string; imageUrl: string }>(
+      `/uploads/engraving-image-url?ext=${encodeURIComponent(ext)}`,
+      { method: 'POST' }
+    ),
 };
 
 // ─── Admin API ───

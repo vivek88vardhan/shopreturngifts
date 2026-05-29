@@ -27,12 +27,13 @@ const DEFAULT_CONFIG = {
   enableComments: false,
   lowStockThreshold: 10,
   promoLabel: 'Limited Time Offer',
-  promoHeadline: 'Up to 40% Off New Arrivals',
+  promoHeadline: 'Up to 10% Off New Arrivals',
   promoSubtext: "Don't miss out on this season's best deals",
   promoBgImageUrl: '',
   whatsappUrl: '',
   instagramUrl: '',
   facebookUrl: '',
+  instagramReelUrls: [] as string[],
   googleAnalyticsId: '',
   rewardsEnabled: false,
   rewardSpendThresholdCents: 10000, // $100
@@ -55,6 +56,13 @@ const DEFAULT_CONFIG = {
 
 // Sentinel returned by the backend in place of the real Stripe key.
 const STRIPE_KEY_MASK = '__stripe_pk_set__';
+
+function parseReelUrls(raw: string): string[] {
+  return raw
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
 
 function normalizeZipInput(zips: string[]): string[] {
   const seen = new Set<string>();
@@ -124,6 +132,8 @@ export default function AdminConfig() {
   const configHydrated = useRef(false);
   /** Raw textarea text so users can add new ZIP lines (trailing newline preserved while typing). */
   const [zipCodesDraft, setZipCodesDraft] = useState('');
+  /** Raw textarea text for Instagram reel links (one per line). */
+  const [reelsDraft, setReelsDraft] = useState('');
 
   useEffect(() => {
     if (!configData || configHydrated.current) return;
@@ -132,6 +142,7 @@ export default function AdminConfig() {
     setConfig(merged);
     setSavedConfig(merged);
     setZipCodesDraft((merged.deliveryZipCodes ?? []).join('\n'));
+    setReelsDraft((merged.instagramReelUrls ?? []).join('\n'));
     if (configData.stripePublishableKey) {
       setStripeKeyIsSet(true);
     }
@@ -145,6 +156,7 @@ export default function AdminConfig() {
       setConfig(merged);
       setSavedConfig(merged);
       setZipCodesDraft((merged.deliveryZipCodes ?? []).join('\n'));
+      setReelsDraft((merged.instagramReelUrls ?? []).join('\n'));
       if (stripeKeyDraft.trim()) {
         setStripeKeyDraft('');
         setStripeKeyIsSet(true);
@@ -161,6 +173,7 @@ export default function AdminConfig() {
   const handleDiscard = () => {
     setConfig({ ...savedConfig });
     setZipCodesDraft((savedConfig.deliveryZipCodes ?? []).join('\n'));
+    setReelsDraft((savedConfig.instagramReelUrls ?? []).join('\n'));
     setStripeKeyDraft('');
   };
 
@@ -596,7 +609,7 @@ export default function AdminConfig() {
             </div>
             <div>
               <Label>Headline</Label>
-              <Input value={config.promoHeadline} onChange={e => setConfig({ ...config, promoHeadline: e.target.value })} className="mt-1" placeholder="Up to 40% Off New Arrivals" />
+              <Input value={config.promoHeadline} onChange={e => setConfig({ ...config, promoHeadline: e.target.value })} className="mt-1" placeholder="Up to 10% Off New Arrivals" />
             </div>
             <div>
               <Label>Subtext</Label>
@@ -662,6 +675,32 @@ export default function AdminConfig() {
                 type="url"
               />
             </div>
+          </div>
+        </div>
+
+        {/* Homepage Reels */}
+        <div className="rounded-lg border bg-card p-6">
+          <h2 className="text-sm font-semibold">Homepage Reels — "Real Party Moments"</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Paste Instagram reel or post links, one per line. The homepage embeds these in order. Leave empty to show the default curated showcase.
+          </p>
+          <div className="mt-4">
+            <Label htmlFor="reel-urls">Instagram reel links</Label>
+            <textarea
+              id="reel-urls"
+              value={reelsDraft}
+              onChange={e => {
+                setReelsDraft(e.target.value);
+                setConfig({ ...config, instagramReelUrls: parseReelUrls(e.target.value) });
+              }}
+              rows={6}
+              spellCheck={false}
+              placeholder={"https://www.instagram.com/reel/ABC123/\nhttps://www.instagram.com/reel/XYZ789/"}
+              className="mt-1 w-full rounded-md border bg-background px-3 py-2 font-mono text-sm"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              {parseReelUrls(reelsDraft).length} reel{parseReelUrls(reelsDraft).length === 1 ? '' : 's'} configured. Supports /reel/, /p/, and /tv/ links.
+            </p>
           </div>
         </div>
 

@@ -1,6 +1,6 @@
-import { useParams, Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { ArrowLeft, Minus, Plus, ShoppingCart, Package, Loader2, Star } from 'lucide-react';
+import { useParams, Link, useLocation } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, Minus, Plus, ShoppingCart, Package, Loader2, Star, Upload, X, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,13 +13,25 @@ import { useProduct, useProducts, useProductFeedback, usePostProductRating, useP
 import ProductCard from '@/components/store/ProductCard';
 import { toast } from '@/lib/inboxToast';
 import { clampCartQuantity, maxQtyForStock } from '@/lib/cartQuantity';
+import { isCustomProduct } from '@/lib/customProduct';
+import { uploadsApi } from '@/lib/api';
 
 export default function ProductDetailPage() {
   const { productId: rawProductId } = useParams();
+  const location = useLocation();
   const productId = rawProductId ? decodeURIComponent(rawProductId) : undefined;
   const { data: product, isLoading, isError } = useProduct(productId);
   const [qty, setQty] = useState(1);
   const addItem = useCartStore(s => s.addItem);
+
+  // ─── Engraving (Custom-category personalization) ───
+  const [engraveName, setEngraveName] = useState('');
+  const [engraveMessage, setEngraveMessage] = useState('');
+  const [engraveImageUrl, setEngraveImageUrl] = useState('');
+  const [engraveImagePreview, setEngraveImagePreview] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const engraveFileRef = useRef<HTMLInputElement>(null);
+  const isCustom = isCustomProduct(product);
 
   const { data: relatedData } = useProducts(product ? { category: product.category } : undefined);
   const related = (relatedData?.items || []).filter(p => p.productId !== productId).slice(0, 4);
@@ -37,6 +49,45 @@ export default function ProductDetailPage() {
     if (!product) return;
     setQty(q => clampCartQuantity(q, product.stock));
   }, [product?.productId, product?.stock]);
+
+  const MAX_ENGRAVE_IMAGE_BYTES = 15 * 1024 * 1024; // 15MB — supports high-resolution images
+
+  const handleEngraveImage = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please choose an image file');
+      return;
+    }
+    if (file.size > MAX_ENGRAVE_IMAGE_BYTES) {
+      toast.error('Image is too large (max 15MB)');
+      return;
+    }
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    setUploadingImage(true);
+    const localPreview = URL.createObjectURL(file);
+    setEngraveImagePreview(localPreview);
+    try {
+      const { uploadUrl, imageUrl } = await uploadsApi.getEngravingImageUploadUrl(ext);
+      const res = await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type } });
+      if (!res.ok) throw new Error('Upload failed');
+      setEngraveImageUrl(imageUrl);
+      toast.success('Image uploaded');
+    } catch (err) {
+      setEngraveImagePreview('');
+      toast.error(err instanceof Error && err.message ? err.message : 'Could not upload image. Please sign in and try again.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const resetEngraving = () => {
+    setEngraveName('');
+    setEngraveMessage('');
+    setEngraveImageUrl('');
+    setEngraveImagePreview('');
+    if (engraveFileRef.current) engraveFileRef.current.value = '';
+  };
+
+  const engravingComplete = !!engraveName.trim() && !!engraveMessage.trim() && !!engraveImageUrl && !uploadingImage;
 
   const hasNutrition = product?.nutritionalFacts && product.nutritionalFacts.length > 0;
   const hasBenefits = !!product?.benefits;
@@ -118,52 +169,175 @@ export default function ProductDetailPage() {
             </div>
           )}
 
-          <div className="mt-8 flex flex-wrap items-center gap-4">
-            <div className="flex items-center rounded-md border">
-              <button
-                type="button"
-                onClick={() => setQty(q => clampCartQuantity(q - 1, product.stock))}
-                disabled={product.stock === 0}
-                className="flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40"
-              >
-                <Minus className="h-4 w-4" />
-              </button>
-              <Input
-                type="number"
-                min={1}
-                max={maxSelectable}
-                value={qty}
-                onChange={e => {
-                  const n = parseInt(e.target.value, 10);
-                  if (Number.isNaN(n)) return;
-                  setQty(clampCartQuantity(n, product.stock));
+          {isCustom ? (
+            <div className="mt-8">
+              <div className="rounded-xl border border-accent/30 bg-accent/5 p-5">
+                <div className="flex items-center gap-2 text-sm font-bold text-foreground">
+                  <Sparkles className="h-4 w-4 text-accent" /> Personalize your engraving
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  All fields are required for custom engraved items.
+                </p>
+
+                {!isAuthenticated ? (
+                  <div className="mt-4 rounded-lg border bg-card p-4 text-sm">
+                    <p className="text-muted-foreground">
+                      Please{' '}
+                      <Link
+                        to="/login"
+                        state={{ from: location.pathname }}
+                        className="font-semibold text-accent underline underline-offset-2"
+                      >
+                        sign in
+                      </Link>{' '}
+                      to personalize and add this item to your cart.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="mt-4 space-y-4">
+                    <div>
+                      <Label htmlFor="engrave-name">Name to be engraved <span className="text-destructive">*</span></Label>
+                      <Input
+                        id="engrave-name"
+                        value={engraveName}
+                        maxLength={120}
+                        onChange={e => setEngraveName(e.target.value)}
+                        placeholder="e.g. James"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="engrave-message">Custom message <span className="text-destructive">*</span></Label>
+                      <Textarea
+                        id="engrave-message"
+                        value={engraveMessage}
+                        maxLength={1000}
+                        rows={3}
+                        onChange={e => setEngraveMessage(e.target.value)}
+                        placeholder="e.g. Happy Father's Day — love always"
+                        className="mt-1 resize-none"
+                      />
+                    </div>
+                    <div>
+                      <Label>Upload 1 high-resolution image <span className="text-destructive">*</span></Label>
+                      <input
+                        ref={engraveFileRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (file) void handleEngraveImage(file);
+                        }}
+                      />
+                      {engraveImagePreview ? (
+                        <div className="mt-2 flex items-center gap-3 rounded-lg border bg-card p-3">
+                          <img src={engraveImagePreview} alt="Engraving preview" className="h-16 w-16 rounded-md object-cover" />
+                          <div className="flex flex-1 flex-col">
+                            <span className="text-xs font-medium text-foreground">
+                              {uploadingImage ? 'Uploading…' : 'Image ready'}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {uploadingImage ? 'Please wait' : 'High-resolution image attached'}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={resetEngraving}
+                            className="text-muted-foreground hover:text-destructive"
+                            aria-label="Remove uploaded image"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => engraveFileRef.current?.click()}
+                          disabled={uploadingImage}
+                          className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed bg-card py-6 text-sm text-muted-foreground transition-colors hover:border-accent/50 hover:text-foreground disabled:opacity-50"
+                        >
+                          {uploadingImage ? (
+                            <><Loader2 className="h-4 w-4 animate-spin" /> Uploading…</>
+                          ) : (
+                            <><Upload className="h-4 w-4" /> Choose image (max 15MB)</>
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <Button
+                className="mt-4 w-full bg-accent text-accent-foreground hover:bg-accent-hover sm:w-auto sm:min-w-[260px]"
+                disabled={product.stock === 0 || !isAuthenticated || !engravingComplete}
+                onClick={() => {
+                  addItem(product, 1, {
+                    name: engraveName.trim(),
+                    message: engraveMessage.trim(),
+                    imageUrl: engraveImageUrl,
+                  });
+                  resetEngraving();
+                  toast.success(`${product.name} added to cart`);
                 }}
-                className="h-10 w-14 border-0 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-              />
-              <button
-                type="button"
-                onClick={() => setQty(q => clampCartQuantity(q + 1, product.stock))}
-                disabled={product.stock === 0 || qty >= maxSelectable}
-                className="flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40"
               >
-                <Plus className="h-4 w-4" />
-              </button>
+                <ShoppingCart className="mr-2 h-4 w-4" /> Add personalized item to cart
+              </Button>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Each personalized item is added individually. Add again to order multiple engravings.
+              </p>
             </div>
-            <Button
-              className="min-w-[200px] flex-1 bg-accent text-accent-foreground hover:bg-accent-hover"
-              disabled={product.stock === 0}
-              onClick={() => {
-                addItem(product, qty);
-                toast.success(`${product.name} added to cart`);
-              }}
-            >
-              <ShoppingCart className="mr-2 h-4 w-4" /> Add to Cart
-            </Button>
-          </div>
-          {maxSelectable > 0 && (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Max {maxSelectable} of this item per order{product.stock < maxSelectable ? ` (${product.stock} in stock)` : ''}.
-            </p>
+          ) : (
+            <>
+              <div className="mt-8 flex flex-wrap items-center gap-4">
+                <div className="flex items-center rounded-md border">
+                  <button
+                    type="button"
+                    onClick={() => setQty(q => clampCartQuantity(q - 1, product.stock))}
+                    disabled={product.stock === 0}
+                    className="flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40"
+                  >
+                    <Minus className="h-4 w-4" />
+                  </button>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={maxSelectable}
+                    value={qty}
+                    onChange={e => {
+                      const n = parseInt(e.target.value, 10);
+                      if (Number.isNaN(n)) return;
+                      setQty(clampCartQuantity(n, product.stock));
+                    }}
+                    className="h-10 w-14 border-0 text-center text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setQty(q => clampCartQuantity(q + 1, product.stock))}
+                    disabled={product.stock === 0 || qty >= maxSelectable}
+                    className="flex h-10 w-10 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+                <Button
+                  className="min-w-[200px] flex-1 bg-accent text-accent-foreground hover:bg-accent-hover"
+                  disabled={product.stock === 0}
+                  onClick={() => {
+                    addItem(product, qty);
+                    toast.success(`${product.name} added to cart`);
+                  }}
+                >
+                  <ShoppingCart className="mr-2 h-4 w-4" /> Add to Cart
+                </Button>
+              </div>
+              {maxSelectable > 0 && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Max {maxSelectable} of this item per order{product.stock < maxSelectable ? ` (${product.stock} in stock)` : ''}.
+                </p>
+              )}
+            </>
           )}
         </div>
       </div>

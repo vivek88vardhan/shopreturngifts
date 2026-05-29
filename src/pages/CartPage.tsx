@@ -14,6 +14,7 @@ import { maxQtyForStock } from '@/lib/cartQuantity';
 import { useSyncFreebie } from '@/hooks/useSyncFreebie';
 import FreebiePromoBanner from '@/components/store/FreebiePromoBanner';
 import { isFreebieCartItem } from '@/lib/freebie';
+import { cartLineKey } from '@/lib/customProduct';
 
 export default function CartPage() {
   useSyncCartPrices();
@@ -49,12 +50,15 @@ export default function CartPage() {
             {items.map((item, idx) => {
               const max = maxQtyForStock(item.product.stock);
               const freeLine = isFreebieCartItem(item, offer);
+              const lineKey = cartLineKey(item);
               return (
                 <div
-                  key={`${item.product.productId}-${freeLine ? 'free' : 'paid'}`}
+                  key={`${lineKey}-${freeLine ? 'free' : 'paid'}`}
                   className={`flex gap-4 p-4 ${idx > 0 ? 'border-t' : ''} ${freeLine ? 'bg-emerald-50/40' : ''}`}
                 >
-                  {item.product.images?.[0] ? (
+                  {item.engraving?.imageUrl ? (
+                    <img src={item.engraving.imageUrl} alt={item.product.name} className="h-20 w-20 flex-shrink-0 rounded-md object-cover" />
+                  ) : item.product.images?.[0] ? (
                     <img src={item.product.images[0]} alt={item.product.name} className="h-20 w-20 flex-shrink-0 rounded-md object-cover" />
                   ) : (
                     <div className="h-20 w-20 flex-shrink-0 rounded-md bg-secondary" />
@@ -66,8 +70,14 @@ export default function CartPage() {
                           {item.product.name}
                         </Link>
                         <p className="text-xs text-muted-foreground">{item.product.category}</p>
+                        {item.engraving && (
+                          <div className="mt-1 rounded-md bg-muted/50 px-2 py-1 text-xs text-muted-foreground">
+                            <p><span className="font-medium text-foreground">Name to engrave:</span> {item.engraving.name}</p>
+                            <p className="line-clamp-2"><span className="font-medium text-foreground">Message:</span> {item.engraving.message}</p>
+                          </div>
+                        )}
                       </div>
-                      <RemoveCartLineDialog productId={item.product.productId} productName={item.product.name} onRemove={removeItem}>
+                      <RemoveCartLineDialog productId={lineKey} productName={item.product.name} onRemove={removeItem}>
                         <button
                           type="button"
                           className="text-muted-foreground hover:text-destructive"
@@ -78,29 +88,33 @@ export default function CartPage() {
                       </RemoveCartLineDialog>
                     </div>
                     <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2">
-                      <div className="flex items-center rounded-md border">
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.product.productId, item.quantity - 1)}
-                          className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:text-foreground"
-                        >
-                          <Minus className="h-3 w-3" />
-                        </button>
-                        <CartLineQuantityInput
-                          quantity={item.quantity}
-                          stock={item.product.stock}
-                          onCommit={(q) => updateQuantity(item.product.productId, q)}
-                          className="h-8 w-12 min-w-0 border-0 p-0 text-center text-sm"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.product.productId, item.quantity + 1)}
-                          disabled={item.quantity >= max}
-                          className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
-                      </div>
+                      {item.engraving ? (
+                        <span className="text-sm text-muted-foreground">Qty: 1 (personalized)</span>
+                      ) : (
+                        <div className="flex items-center rounded-md border">
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(lineKey, item.quantity - 1)}
+                            className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:text-foreground"
+                          >
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <CartLineQuantityInput
+                            quantity={item.quantity}
+                            stock={item.product.stock}
+                            onCommit={(q) => updateQuantity(lineKey, q)}
+                            className="h-8 w-12 min-w-0 border-0 p-0 text-center text-sm"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(lineKey, item.quantity + 1)}
+                            disabled={item.quantity >= max}
+                            className="flex h-8 w-8 items-center justify-center text-muted-foreground hover:text-foreground disabled:opacity-40"
+                          >
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
                       <span className="font-semibold">
                         <ProductPriceDisplay product={item.product} quantity={item.quantity} />
                       </span>

@@ -6,6 +6,10 @@ import { useProducts, useCategories, useThemeConfig } from '@/hooks/useApi';
 import { motion } from 'framer-motion';
 import HomeHero from '@/components/home/HomeHero';
 import SectionHeading from '@/components/home/SectionHeading';
+import CartoonMomentSpotlight from '@/components/home/CartoonMomentSpotlight';
+import InstagramReelsShowcase from '@/components/home/InstagramReelsShowcase';
+import BrandVideoShowcase from '@/components/home/BrandVideoShowcase';
+import { mascotImage, lifestyleImage, allMascotImages, occasionImage, fathersDayImages } from '@/data/shopreturnGiftsMedia';
 
 const easeOut = [0.22, 1, 0.36, 1] as const;
 
@@ -37,31 +41,87 @@ export default function HomePage() {
   const heroTagline = theme?.heroTagline || 'Return gifts that spark joy';
   const heroImageUrl = theme?.heroImageUrl;
   const promoLabel = theme?.promoLabel || 'Limited Time Offer';
-  const promoHeadline = theme?.promoHeadline || 'Up to 40% Off New Arrivals';
+  const promoHeadline = theme?.promoHeadline || 'Up to 10% Off New Arrivals';
   const promoSubtext = theme?.promoSubtext || "Don't miss out on this season's best deals";
   const promoBgImageUrl = theme?.promoBgImageUrl;
   const whatsappUrl = theme?.whatsappUrl?.trim() || '';
   const instagramUrl = theme?.instagramUrl?.trim() || '';
   const facebookUrl = theme?.facebookUrl?.trim() || '';
 
-  const celebrationOccasions = ['Birthdays', 'Weddings', 'Baby Showers', 'Festivals'];
-
   const globalCelebrations = [
-    { title: "Mother's Day", desc: 'Elegant keepsakes for moms and family gatherings.', icon: Flower2 },
-    { title: "Valentine's Day", desc: 'Romantic and cute gifting bundles for couples.', icon: Heart },
-    { title: 'New Year', desc: 'Fresh-start gift boxes with premium festive picks.', icon: Sparkles },
-    { title: 'Halloween', desc: 'Playful themed gift packs for classrooms and parties.', icon: PartyPopper },
-    { title: 'Indian Festivals', desc: 'Diwali, Navratri, Pongal, and regional festive hampers.', icon: Gift },
-    { title: 'Chinese Festivals', desc: 'Lunar New Year and mid-autumn celebration gifting.', icon: Gift },
-    { title: 'Canada Celebrations', desc: 'Canada Day and local event-ready return gift packs.', icon: Cake },
-    { title: 'Kids Party Favors', desc: 'Colorful, age-friendly return gifts that children love.', icon: PartyPopper },
+    { title: "Father's Day", desc: 'Thoughtful keepsakes and gift bundles for dads and grandpas.', icon: Gift, image: occasionImage('fathers-day-01') },
+    { title: "Mother's Day", desc: 'Elegant keepsakes for moms and family gatherings.', icon: Flower2, image: mascotImage(13) },
+    { title: "Valentine's Day", desc: 'Romantic and cute gifting bundles for couples.', icon: Heart, image: mascotImage(9) },
+    { title: 'New Year', desc: 'Fresh-start gift boxes with premium festive picks.', icon: Sparkles, image: mascotImage(10) },
+    { title: 'Easter', desc: 'Bright, kid-friendly egg-hunt favors and spring gift packs.', icon: PartyPopper, image: mascotImage(8) },
+    { title: 'Independence Day', desc: 'Patriotic, red-white-and-blue themed party favors and gifts.', icon: Sparkles, image: occasionImage('independence-day') },
+    { title: 'Halloween', desc: 'Playful themed gift packs for classrooms and parties.', icon: PartyPopper, image: occasionImage('halloween') },
+    { title: 'Kids Party Favors', desc: 'Colorful, age-friendly return gifts that children love.', icon: Cake, image: mascotImage(4) },
   ];
+
+  const promoBg =
+    promoBgImageUrl ||
+    lifestyleImage(6);
 
   return (
     <div className="overflow-x-clip">
       <HomeHero storeName={storeName} heroTagline={heroTagline} heroImageUrl={heroImageUrl} />
 
-      {/* Featured Products — primary focus right after hero */}
+      {/* Upcoming Father's Day promo */}
+      <section className="py-12 lg:py-16">
+        <div className="sf-container">
+          <motion.div
+            className="overflow-hidden rounded-3xl border bg-gradient-to-br from-blue-950 via-blue-900 to-slate-900 shadow-xl"
+            initial={{ opacity: 0, y: 24 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '-50px' }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <div className="flex flex-col gap-8 p-6 md:p-10 lg:flex-row lg:items-center">
+              <div className="lg:w-1/3">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-400/20 px-3 py-1 text-xs font-bold uppercase tracking-widest text-amber-300">
+                  <PartyPopper className="h-3.5 w-3.5" /> Coming soon
+                </span>
+                <h2 className="mt-4 text-3xl font-extrabold leading-tight text-white lg:text-4xl">
+                  Upcoming Father&apos;s Day gifts are ready
+                </h2>
+                <p className="mt-3 text-sm leading-relaxed text-white/75 lg:text-base">
+                  Personalized hampers for dad — engraved mugs, leather keychains, gourmet treats, and beautifully wrapped baskets. Pre-book now and gift something he&apos;ll remember.
+                </p>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Button asChild size="lg" className="bg-amber-400 text-slate-900 hover:bg-amber-300">
+                    <Link to="/products">
+                      Shop Father&apos;s Day gifts <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:w-2/3 lg:grid-cols-2 xl:grid-cols-4">
+                {fathersDayImages.map((src, i) => (
+                  <motion.div
+                    key={src}
+                    custom={i}
+                    variants={scaleIn}
+                    initial="hidden"
+                    whileInView="visible"
+                    viewport={{ once: true }}
+                    className="overflow-hidden rounded-2xl border border-white/10 bg-white shadow-lg"
+                  >
+                    <img
+                      src={src}
+                      alt={`Father's Day gift basket ${i + 1}`}
+                      className="aspect-square w-full object-cover transition-transform duration-500 hover:scale-105"
+                      loading="lazy"
+                    />
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Featured Products */}
       <section className="py-16 lg:py-20">
         <div className="sf-container">
           <SectionHeading
@@ -96,10 +156,10 @@ export default function HomePage() {
           ) : (
             <p className="mt-10 text-center text-muted-foreground">
               New return gift collections are on the way.{' '}
-              <Link to="/contact" className="font-semibold text-accent hover:underline">
-                Join the waitlist
+              <Link to="/products" className="font-semibold text-accent hover:underline">
+                Browse the catalog
               </Link>{' '}
-              to shop first at launch.
+              to see what&apos;s available.
             </p>
           )}
         </div>
@@ -151,43 +211,13 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Launch waitlist */}
-      <section className="py-14 lg:py-16">
-        <div className="sf-container">
-          <motion.div
-            className="rounded-3xl border bg-card px-6 py-8 shadow-sm md:px-10 md:py-10"
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-[0.2em] text-accent">shopreturngifts.com</p>
-                <h2 className="mt-2 text-2xl font-extrabold text-foreground md:text-3xl">
-                  Join the waitlist — 15% off at launch
-                </h2>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Personalized return gifts, hand-picked collections, and beautifully wrapped bundles for every special day.
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {celebrationOccasions.map((item) => (
-                    <span key={item} className="rounded-full border bg-secondary px-3 py-1 text-xs font-medium text-foreground/90">
-                      {item}
-                    </span>
-                  ))}
-                </div>
-              </div>
-              <Button asChild size="lg" className="bg-accent text-accent-foreground hover:bg-accent-hover md:min-w-[220px]">
-                <Link to="/contact">
-                  Notify me at launch <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
-          </motion.div>
-        </div>
-      </section>
+      <CartoonMomentSpotlight />
 
-      {/* Celebrations — icons only; no legacy stock imagery */}
+      <InstagramReelsShowcase instagramUrl={instagramUrl} reelUrls={theme?.instagramReelUrls} />
+
+      <BrandVideoShowcase />
+
+      {/* Celebrations */}
       <section className="bg-background py-16 lg:py-20">
         <div className="sf-container">
           <SectionHeading
@@ -202,24 +232,27 @@ export default function HomePage() {
             whileInView="visible"
             viewport={{ once: true, margin: '-50px' }}
           >
-            {globalCelebrations.map(({ title, desc, icon: Icon }, i) => (
+            {globalCelebrations.map(({ title, desc, icon: Icon, image }, i) => (
               <motion.div
                 key={title}
                 custom={i}
                 variants={scaleIn}
-                className="rounded-2xl border bg-card p-6 transition-all hover:-translate-y-1 hover:border-accent/30 hover:shadow-lg"
+                className="overflow-hidden rounded-2xl border bg-card transition-all hover:-translate-y-1 hover:border-accent/30 hover:shadow-lg"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent/10 text-accent">
-                  <Icon className="h-6 w-6" />
+                <div className="relative h-36 overflow-hidden bg-muted">
+                  <img src={image} alt="" className="h-full w-full object-cover object-top" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-card via-card/30 to-transparent" />
+                  <div className="absolute left-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg bg-card/90 text-accent shadow-sm">
+                    <Icon className="h-4 w-4" />
+                  </div>
                 </div>
-                <h3 className="mt-4 text-base font-bold text-foreground">{title}</h3>
-                <p className="mt-2 text-sm text-muted-foreground">{desc}</p>
-                <Link
-                  to="/products"
-                  className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline"
-                >
-                  Shop gifts <ChevronRight className="h-3 w-3" />
-                </Link>
+                <div className="p-5">
+                  <h3 className="text-base font-bold text-foreground">{title}</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">{desc}</p>
+                  <Link to="/products" className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-accent hover:underline">
+                    Shop gifts <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </div>
               </motion.div>
             ))}
           </motion.div>
@@ -268,31 +301,22 @@ export default function HomePage() {
         <div className="sf-container py-16 lg:py-20">
           <motion.div
             className="relative overflow-hidden rounded-3xl p-10 lg:p-16"
-            style={
-              promoBgImageUrl
-                ? {
-                    backgroundImage: `url(${promoBgImageUrl})`,
-                    backgroundSize: 'cover',
-                    backgroundPosition: 'center',
-                  }
-                : undefined
-            }
+            style={{
+              backgroundImage: `url(${promoBg})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+            }}
             initial={{ opacity: 0, y: 40 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
           >
-            {promoBgImageUrl ? (
-              <div className="absolute inset-0 bg-foreground/50" />
-            ) : (
-              <>
-                <div className="absolute inset-0 bg-gradient-to-r from-accent to-accent-hover" />
-                <div className="absolute inset-0 opacity-10">
-                  <div className="absolute top-0 right-0 h-96 w-96 -translate-y-1/2 translate-x-1/3 rounded-full bg-white/20" />
-                  <div className="absolute bottom-0 left-0 h-64 w-64 translate-y-1/3 -translate-x-1/4 rounded-full bg-white/10" />
-                </div>
-              </>
-            )}
+            <div className="absolute inset-0 bg-foreground/55" />
+            <div className="pointer-events-none absolute bottom-4 right-4 hidden gap-2 lg:flex">
+              {allMascotImages.slice(0, 5).map((src) => (
+                <img key={src} src={src} alt="" className="h-16 w-16 rounded-xl border-2 border-white/30 object-cover object-top shadow-lg" />
+              ))}
+            </div>
             <div className="relative z-10 flex flex-col items-center justify-between gap-8 md:flex-row">
               <div className="text-center md:text-left">
                 <motion.p

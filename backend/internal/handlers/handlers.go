@@ -868,6 +868,17 @@ func (h *Handlers) CreateOrder(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, fmt.Sprintf("insufficient stock for %s", product.Name))
 			return
 		}
+		// Products in the "Custom" category require engraving details
+		// (name, message, and one uploaded image) before they can be ordered.
+		var engraving *models.EngravingDetails
+		if isCustomCategory(product.Category) {
+			eng, engErr := validateEngraving(ci.Engraving, product.Name, h.db.GetPublicURL(""))
+			if engErr != nil {
+				writeError(w, http.StatusBadRequest, engErr.Error())
+				return
+			}
+			engraving = eng
+		}
 		lineTotal := product.Price * float64(ci.Qty)
 		items = append(items, models.OrderItem{
 			ProductID: ci.ProductID,
@@ -875,6 +886,7 @@ func (h *Handlers) CreateOrder(w http.ResponseWriter, r *http.Request) {
 			Qty:       ci.Qty,
 			UnitPrice: product.Price,
 			LineTotal: lineTotal,
+			Engraving: engraving,
 		})
 		subtotal += lineTotal
 	}
@@ -1568,6 +1580,70 @@ func normalizeProductType(raw string) (string, error) {
 	default:
 		return "", fmt.Errorf("productType must be either \"product\" or \"package\"")
 	}
+}
+
+// isCustomCategory reports whether a product belongs to the "Custom" category,
+// which requires engraving personalization before checkout.
+func isCustomCategory(category string) bool {
+	return strings.EqualFold(strings.TrimSpace(category), "Custom")
+}
+
+const (
+	maxEngravingNameLen    = 120
+	maxEngravingMessageLen = 1000
+)
+
+// validateEngraving ensures a custom-category line item includes the mandatory
+// engraving name, message, and an uploaded image that lives in our assets
+// bucket. It returns a trimmed copy on success.
+func validateEngraving(in *models.EngravingDetails, productName, publicURLPrefix string) (*models.EngravingDetails, error) {
+	if in == nil {
+		return nil, fmt.Errorf("%s requires an engraving name, message, and image", productName)
+	}
+	name := strings.TrimSpace(in.Name)
+	message := strings.TrimSpace(in.Message)
+	imageURL := strings.TrimSpace(in.ImageURL)
+	if name == "" || message == "" || imageURL == "" {
+		return nil, fmt.Errorf("%s requires an engraving name, message, and image", productName)
+	}
+	if len(name) > maxEngravingNameLen {
+		return nil, fmt.Errorf("engraving name for %s is too long (max %d characters)", productName, maxEngravingNameLen)
+	}
+	if len(message) > maxEngravingMessageLen {
+		return nil, fmt.Errorf("engraving message for %s is too long (max %d characters)", productName, maxEngravingMessageLen)
+	}
+	// The image must have been uploaded through our presigned-upload endpoint
+	// (i.e. it points at our assets bucket), to prevent arbitrary external URLs.
+	if publicURLPrefix != "" && !strings.HasPrefix(imageURL, publicURLPrefix) {
+		return nil, fmt.Errorf("invalid engraving image for %s", productName)
+	}
+	return &models.EngravingDetails{Name: name, Message: message, ImageURL: imageURL}, nil
+}
+
+// GetEngravingImageUploadURL returns a presigned S3 PUT URL so an authenticated
+// customer can upload a single high-resolution engraving image before ordering.
+func (h *Handlers) GetEngravingImageUploadURL(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r)
+	ext := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("ext")))
+	switch ext {
+	case "jpg", "jpeg", "png", "webp":
+	default:
+		ext = "jpg"
+	}
+	safeUser, err := sanitizeS3PathSegment(userID)
+	if err != nil || safeUser == "" {
+		safeUser = "anon"
+	}
+	key := fmt.Sprintf("engraving/%s/%s.%s", safeUser, uuid.New().String(), ext)
+	url, err := h.db.GetPresignedUploadURL(r.Context(), key)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"uploadUrl": url,
+		"imageUrl":  h.db.GetPublicURL(key),
+	})
 }
 
 func normalizePackageItems(raw []models.ProductPackageItem, productType, selfID string) ([]models.ProductPackageItem, error) {
@@ -3338,6 +3414,23 @@ func (h *Handlers) AdminUpdateConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if existing.DeliveryZipCodes == nil {
 		existing.DeliveryZipCodes = []string{}
+	}
+
+	// Instagram reels: apply explicitly so the list is never dropped by partial
+	// merges, and trim blank lines the admin may have entered.
+	if v, ok := raw["instagramReelUrls"]; ok {
+		var reels []string
+		if err := json.Unmarshal(v, &reels); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid instagramReelUrls")
+			return
+		}
+		cleaned := make([]string, 0, len(reels))
+		for _, u := range reels {
+			if t := strings.TrimSpace(u); t != "" {
+				cleaned = append(cleaned, t)
+			}
+		}
+		existing.InstagramReelUrls = cleaned
 	}
 
 	// Log the configuration being saved (for debugging)

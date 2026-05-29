@@ -141,7 +141,7 @@ export function useOrder(orderId: string | undefined) {
 export function useCreateOrder() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { items: { productId: string; qty: number }[]; shippingAddress: Address; couponCode?: string }) =>
+    mutationFn: (data: { items: { productId: string; qty: number; engraving?: import('@/types').EngravingDetails }[]; shippingAddress: Address; couponCode?: string }) =>
       ordersApi.createOrder(data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['orders'] }); },
   });

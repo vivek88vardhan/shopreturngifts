@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { Elements } from '@stripe/react-stripe-js';
 import { useNavigate } from 'react-router-dom';
+import { cartLineKey } from '@/lib/customProduct';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -44,9 +45,11 @@ function CheckoutUnauthenticated() {
               <div className="p-8 text-center text-muted-foreground">Your cart is empty</div>
             ) : (
               items.map(item => (
-                <div key={item.product.productId} className="flex items-center justify-between px-5 py-4">
+                <div key={cartLineKey(item)} className="flex items-center justify-between px-5 py-4">
                   <div className="flex items-center gap-4">
-                    {item.product.images?.[0] ? (
+                    {item.engraving?.imageUrl ? (
+                      <img src={item.engraving.imageUrl} alt={item.product.name} className="h-14 w-14 rounded-md object-cover" />
+                    ) : item.product.images?.[0] ? (
                       <img src={item.product.images[0]} alt={item.product.name} className="h-14 w-14 rounded-md object-cover" />
                     ) : (
                       <div className="h-14 w-14 rounded-md bg-secondary" />
@@ -54,6 +57,9 @@ function CheckoutUnauthenticated() {
                     <div>
                       <p className="text-sm font-medium">{item.product.name}</p>
                       <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
+                      {item.engraving && (
+                        <p className="text-xs text-accent">Personalized: {item.engraving.name}</p>
+                      )}
                     </div>
                   </div>
                   <ProductPriceDisplay product={item.product} quantity={item.quantity} saleClassName="text-sm font-medium text-foreground" />
@@ -262,7 +268,11 @@ export default function CheckoutPage() {
 
     try {
       const result = await createOrder.mutateAsync({
-        items: items.map(i => ({ productId: i.product.productId, qty: i.quantity })),
+        items: items.map(i => ({
+          productId: i.product.productId,
+          qty: i.quantity,
+          ...(i.engraving ? { engraving: i.engraving } : {}),
+        })),
         shippingAddress: {
           line1: address.line1,
           line2: address.line2,
@@ -534,10 +544,16 @@ export default function CheckoutPage() {
               <h2 className="text-lg font-semibold">Order Review</h2>
               <div className="mt-4 divide-y">
                 {items.map(item => (
-                  <div key={item.product.productId} className="flex items-center justify-between py-3">
+                  <div key={cartLineKey(item)} className="flex items-center justify-between py-3">
                     <div>
                       <p className="text-sm font-medium">{item.product.name}</p>
                       <p className="text-xs text-muted-foreground">Qty: {item.quantity}</p>
+                      {item.engraving && (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          <p><span className="font-medium text-foreground">Engrave:</span> {item.engraving.name}</p>
+                          <p className="line-clamp-2"><span className="font-medium text-foreground">Message:</span> {item.engraving.message}</p>
+                        </div>
+                      )}
                     </div>
                     <ProductPriceDisplay product={item.product} quantity={item.quantity} saleClassName="text-sm font-medium text-foreground" />
                   </div>

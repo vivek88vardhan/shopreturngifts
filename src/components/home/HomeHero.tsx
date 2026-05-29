@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Sparkles, Star, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import HeroVideoBackground from '@/components/home/HeroVideoBackground';
+import { HERO_POSTER } from '@/data/shopreturnGiftsMedia';
 
 type HomeHeroProps = {
   storeName: string;
@@ -10,9 +11,10 @@ type HomeHeroProps = {
 };
 
 export default function HomeHero({ storeName, heroTagline, heroImageUrl }: HomeHeroProps) {
+  const heroPoster = heroImageUrl?.trim() || HERO_POSTER;
   return (
     <section className="relative flex min-h-[min(calc(100svh-var(--sf-nav-height)),48rem)] flex-col justify-end sm:min-h-[calc(100dvh-var(--sf-nav-height))] sm:justify-center">
-      <HeroVideoBackground posterSrc={heroImageUrl} />
+      <HeroVideoBackground posterSrc={heroPoster} />
 
       <div className="sf-container relative z-10 w-full min-w-0 pb-10 pt-20 sm:pb-16 sm:pt-28 md:pb-24 md:pt-32">
         <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-col items-center text-center sm:items-start sm:text-left">
@@ -49,7 +51,7 @@ export default function HomeHero({ storeName, heroTagline, heroImageUrl }: HomeH
               size="lg"
               className="h-11 w-full border-2 border-white/35 bg-white/5 px-6 text-base text-white backdrop-blur-sm hover:bg-white/15 hover:text-white sm:h-12 sm:w-auto sm:px-8"
             >
-              <Link to="/contact">Join waitlist</Link>
+              <Link to="/products">Browse collections</Link>
             </Button>
           </div>
 

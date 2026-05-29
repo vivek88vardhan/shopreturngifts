@@ -618,13 +618,40 @@ export default function AdminOrders() {
               <div>
                 <Label className="mb-2 block">Order Items</Label>
                 <div className="divide-y rounded-md border">
-                  {(selected.items || []).map(item => (
-                    <div key={item.productId} className="flex items-center justify-between px-4 py-3 text-sm">
-                      <div>
-                        <p className="font-medium">{item.name}</p>
-                        <p className="text-xs text-muted-foreground">Qty: {item.qty} × {formatPrice(item.unitPrice)}</p>
+                  {(selected.items || []).map((item, idx) => (
+                    <div key={`${item.productId}-${idx}`} className="px-4 py-3 text-sm">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium">
+                            {item.name}
+                            {item.engraving && (
+                              <span className="ml-2 rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent align-middle">
+                                PERSONALIZED
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-muted-foreground">Qty: {item.qty} × {formatPrice(item.unitPrice)}</p>
+                        </div>
+                        <span className="font-medium">{formatPrice(item.lineTotal)}</span>
                       </div>
-                      <span className="font-medium">{formatPrice(item.lineTotal)}</span>
+                      {item.engraving && (
+                        <div className="mt-2 flex gap-3 rounded-md border bg-muted/40 p-3">
+                          {item.engraving.imageUrl && (
+                            <a href={item.engraving.imageUrl} target="_blank" rel="noopener noreferrer" className="flex-shrink-0">
+                              <img src={item.engraving.imageUrl} alt="Engraving" className="h-20 w-20 rounded-md object-cover ring-1 ring-border" />
+                            </a>
+                          )}
+                          <div className="min-w-0 flex-1 text-xs">
+                            <p className="break-words"><span className="font-semibold text-foreground">Engrave name:</span> {item.engraving.name}</p>
+                            <p className="mt-1 whitespace-pre-wrap break-words"><span className="font-semibold text-foreground">Message:</span> {item.engraving.message}</p>
+                            {item.engraving.imageUrl && (
+                              <a href={item.engraving.imageUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-accent underline">
+                                Open full-resolution image
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

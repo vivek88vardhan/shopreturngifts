@@ -13,6 +13,7 @@ import { computeShippingFee } from '@/lib/shipping';
 import { useSyncFreebie } from '@/hooks/useSyncFreebie';
 import FreebiePromoBanner from '@/components/store/FreebiePromoBanner';
 import { isFreebieCartItem } from '@/lib/freebie';
+import { cartLineKey } from '@/lib/customProduct';
 
 export default function CartDrawer() {
   const { items, isOpen, closeCart, removeItem, updateQuantity, subtotal } = useCartStore();
@@ -51,12 +52,15 @@ export default function CartDrawer() {
               <div className="flex flex-col gap-4">
                 {items.map((item) => {
                   const freeLine = isFreebieCartItem(item, offer);
+                  const lineKey = cartLineKey(item);
                   return (
                   <div
-                    key={`${item.product.productId}-${freeLine ? 'free' : 'paid'}`}
+                    key={`${lineKey}-${freeLine ? 'free' : 'paid'}`}
                     className={`flex gap-4 rounded-lg border p-3 ${freeLine ? 'border-emerald-200 bg-emerald-50/40' : ''}`}
                   >
-                    {item.product.images?.[0] ? (
+                    {item.engraving?.imageUrl ? (
+                      <img src={item.engraving.imageUrl} alt={item.product.name} className="h-16 w-16 flex-shrink-0 rounded-md object-cover" />
+                    ) : item.product.images?.[0] ? (
                       <img src={item.product.images[0]} alt={item.product.name} className="h-16 w-16 flex-shrink-0 rounded-md object-cover" />
                     ) : (
                       <div className="h-16 w-16 flex-shrink-0 rounded-md bg-secondary" />
@@ -70,9 +74,14 @@ export default function CartDrawer() {
                               FREE GIFT
                             </span>
                           )}
+                          {item.engraving && (
+                            <span className="ml-2 rounded-full bg-accent/15 px-1.5 py-0.5 text-[10px] font-semibold text-accent">
+                              PERSONALIZED
+                            </span>
+                          )}
                         </p>
                         <RemoveCartLineDialog
-                          productId={item.product.productId}
+                          productId={lineKey}
                           productName={item.product.name}
                           onRemove={removeItem}
                           beforeNavigate={closeCart}
@@ -93,16 +102,29 @@ export default function CartDrawer() {
                           saleClassName="text-sm font-semibold text-accent"
                         />
                       </div>
+                      {item.engraving && (
+                        <div className="mt-1 rounded-md bg-muted/50 px-2 py-1 text-[11px] text-muted-foreground">
+                          <p className="truncate"><span className="font-medium text-foreground">Name:</span> {item.engraving.name}</p>
+                          <p className="line-clamp-2"><span className="font-medium text-foreground">Message:</span> {item.engraving.message}</p>
+                        </div>
+                      )}
                       {freeLine ? (
                         <div className="mt-2 flex items-center justify-between">
                           <span className="text-xs text-muted-foreground">Qty: 1</span>
                           <span className="text-sm font-semibold text-emerald-700">{formatPrice(0)}</span>
                         </div>
+                      ) : item.engraving ? (
+                        <div className="mt-2 flex items-center justify-between">
+                          <span className="text-xs text-muted-foreground">Qty: 1</span>
+                          <span className="text-sm font-medium">
+                            <ProductPriceDisplay product={item.product} quantity={1} saleClassName="text-sm font-medium text-foreground" />
+                          </span>
+                        </div>
                       ) : (
                         <div className="mt-2 flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => updateQuantity(item.product.productId, item.quantity - 1)}
+                            onClick={() => updateQuantity(lineKey, item.quantity - 1)}
                             className="flex h-6 w-6 items-center justify-center rounded border text-muted-foreground hover:bg-secondary"
                           >
                             <Minus className="h-3 w-3" />
@@ -110,12 +132,12 @@ export default function CartDrawer() {
                           <CartLineQuantityInput
                             quantity={item.quantity}
                             stock={item.product.stock}
-                            onCommit={(q) => updateQuantity(item.product.productId, q)}
+                            onCommit={(q) => updateQuantity(lineKey, q)}
                             className="h-6 w-11 min-w-0 border-0 p-0 text-center text-xs"
                           />
                           <button
                             type="button"
-                            onClick={() => updateQuantity(item.product.productId, item.quantity + 1)}
+                            onClick={() => updateQuantity(lineKey, item.quantity + 1)}
                             disabled={item.quantity >= maxQtyForStock(item.product.stock)}
                             className="flex h-6 w-6 items-center justify-center rounded border text-muted-foreground hover:bg-secondary disabled:opacity-40"
                           >

@@ -52,11 +52,23 @@ export interface Category {
   isActive: boolean;
 }
 
+/** Personalization for "Custom" category products (mandatory engraving). */
+export interface EngravingDetails {
+  name: string;
+  message: string;
+  imageUrl: string;
+}
+
 export interface CartItem {
   product: Product;
   quantity: number;
   /** Promotional free gift line (price forced to $0). */
   isFreebie?: boolean;
+  /** Unique line identifier — set for personalized (engraving) lines so the
+   * same product can appear multiple times with different customizations. */
+  lineId?: string;
+  /** Engraving details for Custom-category products. */
+  engraving?: EngravingDetails;
 }
 
 export interface FreebieOffer {
@@ -118,6 +130,7 @@ export interface OrderItem {
   unitPrice: number;
   lineTotal: number;
   isFreebie?: boolean;
+  engraving?: EngravingDetails;
 }
 
 export interface Order {
@@ -239,6 +252,8 @@ export interface StoreConfig {
   whatsappUrl?: string;
   instagramUrl?: string;
   facebookUrl?: string;
+  /** Instagram reel/post permalinks shown in the homepage "Real Party Moments" section. */
+  instagramReelUrls?: string[];
   googleAnalyticsId?: string;
   // Rewards program (points are earned on Delivered orders, become
   // available after `rewardEligibilityDays`, and redeemable at checkout)
